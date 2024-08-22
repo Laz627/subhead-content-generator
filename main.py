@@ -181,6 +181,7 @@ def create_word_document(keyword, optimized_structure):
     return doc
 
 # Streamlit UI
+# Streamlit UI
 st.write("Enter your API keys and target keyword below:")
 
 openai_api_key = st.text_input("OpenAI API key:", value=st.session_state.openai_api_key, type="password")
@@ -204,16 +205,24 @@ if st.button("Generate Content Outline"):
                     time.sleep(random.uniform(1, 3))  # Random delay to avoid rate limiting
                     headings = extract_headings(url)
                     all_headings.append(headings)
-                    st.write(f"Headings extracted from {url}:")
-                    st.write(headings)
+                
+                # Display extracted subheads
+                st.subheader("Extracted Subheads from Top Results:")
+                for i, headings in enumerate(all_headings, 1):
+                    st.write(f"URL {i}:")
+                    for level in ["h2", "h3", "h4"]:
+                        if headings[level]:
+                            st.write(f"{level.upper()}:")
+                            for heading in headings[level]:
+                                st.write(f"- {heading}")
+                    st.write("---")
                 
                 heading_analysis = analyze_headings(all_headings)
-                st.write("Heading Analysis:", heading_analysis)
                 
                 with st.spinner("Generating optimized content structure..."):
                     optimized_structure = generate_optimized_structure(keyword, heading_analysis, openai_api_key)
                     if optimized_structure:
-                        st.write("Optimized Content Structure:")
+                        st.subheader("Optimized Content Structure:")
                         st.text(optimized_structure)
                         
                         # Create and offer Word document download
