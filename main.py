@@ -182,21 +182,21 @@ def create_word_document(keyword, optimized_structure):
     while i < len(lines):
         line = lines[i].strip()
         if line.startswith('H2:'):
-            doc.add_paragraph(line[3:].strip(), style='H2')
+            doc.add_paragraph(f"H2: {line[3:].strip()}", style='H2')
             i += 1
             # Add content for H2
             while i < len(lines) and lines[i].strip().startswith('-'):
                 doc.add_paragraph(lines[i].strip(), style='List Bullet')
                 i += 1
         elif line.startswith('H3:'):
-            doc.add_paragraph(line[3:].strip(), style='H3')
+            doc.add_paragraph(f"H3: {line[3:].strip()}", style='H3')
             i += 1
             # Add content for H3
             while i < len(lines) and lines[i].strip().startswith('-'):
                 doc.add_paragraph(lines[i].strip(), style='List Bullet')
                 i += 1
         elif line.startswith('H4:'):
-            doc.add_paragraph(line[3:].strip(), style='H4')
+            doc.add_paragraph(f"H4: {line[3:].strip()}", style='H4')
             i += 1
             # Add content for H4
             while i < len(lines) and lines[i].strip().startswith('-'):
