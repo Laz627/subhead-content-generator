@@ -107,28 +107,33 @@ def generate_optimized_structure(keyword, heading_analysis, api_key):
     Pay special attention to the 'examples' in each heading level, as these are actual headings from top-ranking pages.
     
     Requirements:
-    - Create a structure with H2s, H3s, and H4s that closely mirrors the examples provided
-    - Incorporate common themes and words from the analysis
-    - Ensure the structure is comprehensive and covers the topic thoroughly
-    - Include brief directions on what content should be included under each heading
-    - Maintain a similar style and tone to the example headings
-    
+    1. Create a logical, user-focused structure with H2s, H3s, and H4s that guides the reader through understanding the topic comprehensively.
+    2. Ensure the structure flows cohesively, focusing on what users should know about the topic.
+    3. Avoid using branded subheads unless absolutely necessary for the topic.
+    4. Include brief directions on what content should be included under each heading.
+    5. Maintain a similar style and tone to the example headings while improving clarity and user focus.
+    6. Organize the content in a way that naturally progresses from basic concepts to more advanced ideas.
+    7. Include sections that address common questions or concerns related to the topic.
+    8. Where applicable, include comparisons with alternatives or related concepts.
+    9. Consider including a section on practical application or next steps for the reader.
+    10. Ensure the outline covers the topic thoroughly while remaining focused and relevant to the main keyword.
+
     Provide the output in the following format:
-    H2: [Heading based on examples]
+    H2: [Heading based on examples and best practices]
     - [Brief direction on content]
-      H3: [Subheading based on examples]
+      H3: [Subheading based on examples and best practices]
       - [Brief direction on content]
-        H4: [Sub-subheading based on examples]
+        H4: [Sub-subheading based on examples and best practices]
         - [Brief direction on content]
     
-    Repeat this structure for multiple H2s, H3s, and H4s as needed, closely following the example headings provided.
+    Repeat this structure as needed, ensuring a logical flow of information that best serves the user's needs based on the given keyword.
     """
     
     try:
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are an SEO expert creating optimized content outlines."},
+                {"role": "system", "content": "You are an SEO expert creating optimized, user-focused content outlines for any given topic."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7
