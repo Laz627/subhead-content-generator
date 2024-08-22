@@ -1,44 +1,43 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote_plus, urlparse
 from collections import Counter
 from openai import OpenAI
 from docx import Document
 from io import BytesIO
 import time
 import random
+from serpapi import GoogleSearch
 
 # Set page config
 st.set_page_config(page_title="SEO Content Outline Generator", layout="wide")
 st.title("SEO Content Outline Generator")
 
 # Initialize session state
-if 'api_key' not in st.session_state:
-    st.session_state.api_key = ''
+if 'openai_api_key' not in st.session_state:
+    st.session_state.openai_api_key = ''
+if 'serpapi_api_key' not in st.session_state:
+    st.session_state.serpapi_api_key = ''
 if 'keyword' not in st.session_state:
     st.session_state.keyword = ''
 
-def get_top_urls(keyword, num_results=5):
-    url = f"https://www.google.com/search?q={quote_plus(keyword)}&num={num_results*2}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+def get_top_urls(keyword, serpapi_key, num_results=5):
+    params = {
+        "api_key": serpapi_key,
+        "engine": "google",
+        "q": keyword,
+        "num": num_results,
+        "gl": "us",
+        "hl": "en"
     }
+    
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
+        search = GoogleSearch(params)
+        results = search.get_dict()
         
         urls = []
-        for result in soup.select("div.yuRUbf > a"):
-            href = result.get('href')
-            if href and href.startswith('http'):
-                parsed_url = urlparse(href)
-                base_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-                if base_url not in urls:
-                    urls.append(base_url)
-                    if len(urls) == num_results:
-                        break
+        for result in results.get("organic_results", [])[:num_results]:
+            urls.append(result["link"])
         
         st.write(f"Extracted {len(urls)} URLs:")
         for url in urls:
@@ -121,7 +120,7 @@ def generate_optimized_structure(keyword, heading_analysis, api_key):
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an SEO expert creating optimized content outlines."},
                 {"role": "user", "content": prompt}
@@ -150,21 +149,23 @@ def create_word_document(keyword, optimized_structure):
     return doc
 
 # Streamlit UI
-st.write("Enter your OpenAI API key and target keyword below:")
+st.write("Enter your API keys and target keyword below:")
 
-api_key = st.text_input("OpenAI API key:", value=st.session_state.api_key, type="password")
+openai_api_key = st.text_input("OpenAI API key:", value=st.session_state.openai_api_key, type="password")
+serpapi_api_key = st.text_input("SerpApi API key:", value=st.session_state.serpapi_api_key, type="password")
 keyword = st.text_input("Target keyword:", value=st.session_state.keyword)
 
 # Update session state
-st.session_state.api_key = api_key
+st.session_state.openai_api_key = openai_api_key
+st.session_state.serpapi_api_key = serpapi_api_key
 st.session_state.keyword = keyword
 
 if st.button("Generate Content Outline"):
-    if api_key and keyword:
+    if openai_api_key and serpapi_api_key and keyword:
         with st.spinner("Analyzing top search results..."):
-            urls = get_top_urls(keyword)
+            urls = get_top_urls(keyword, serpapi_api_key)
             if not urls:
-                st.error("No URLs were extracted. Please try a different keyword or try again later.")
+                st.error("No URLs were extracted. Please check your SerpApi key and try again.")
             else:
                 all_headings = []
                 for url in urls:
@@ -178,7 +179,7 @@ if st.button("Generate Content Outline"):
                 st.write("Heading Analysis:", heading_analysis)
                 
                 with st.spinner("Generating optimized content structure..."):
-                    optimized_structure = generate_optimized_structure(keyword, heading_analysis, api_key)
+                    optimized_structure = generate_optimized_structure(keyword, heading_analysis, openai_api_key)
                     if optimized_structure:
                         st.write("Optimized Content Structure:")
                         st.text(optimized_structure)
@@ -194,4 +195,4 @@ if st.button("Generate Content Outline"):
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         )
     else:
-        st.error("Please enter both your OpenAI API key and a target keyword to generate a content outline.")
+        st.error("Please enter your OpenAI API key, SerpApi API key, and a target keyword to generate a content outline.")
