@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from collections import Counter
 from openai import OpenAI
 from docx import Document
@@ -20,16 +20,34 @@ if 'keyword' not in st.session_state:
     st.session_state.keyword = ''
 
 def get_top_urls(keyword, num_results=5):
-    url = f"https://www.google.com/search?q={quote_plus(keyword)}&num={num_results+5}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, "html.parser")
-    
-    urls = []
-    for result in soup.select("div.yuRUbf > a"):
-        if len(urls) < num_results:
-            urls.append(result["href"])
-    return urls
+    url = f"https://www.google.com/search?q={quote_plus(keyword)}&num={num_results*2}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        urls = []
+        for result in soup.select("div.yuRUbf > a"):
+            href = result.get('href')
+            if href and href.startswith('http'):
+                parsed_url = urlparse(href)
+                base_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+                if base_url not in urls:
+                    urls.append(base_url)
+                    if len(urls) == num_results:
+                        break
+        
+        st.write(f"Extracted {len(urls)} URLs:")
+        for url in urls:
+            st.write(url)
+        
+        return urls
+    except Exception as e:
+        st.error(f"Error fetching search results: {str(e)}")
+        return []
 
 def extract_headings(url):
     try:
@@ -103,7 +121,7 @@ def generate_optimized_structure(keyword, heading_analysis, api_key):
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an SEO expert creating optimized content outlines."},
                 {"role": "user", "content": prompt}
@@ -145,35 +163,35 @@ if st.button("Generate Content Outline"):
     if api_key and keyword:
         with st.spinner("Analyzing top search results..."):
             urls = get_top_urls(keyword)
-            st.write("Extracted URLs:")
-            st.write(urls)
-            
-            all_headings = []
-            for url in urls:
-                time.sleep(random.uniform(1, 3))  # Random delay to avoid rate limiting
-                headings = extract_headings(url)
-                all_headings.append(headings)
-                st.write(f"Headings extracted from {url}:")
-                st.write(headings)
-            
-            heading_analysis = analyze_headings(all_headings)
-            st.write("Heading Analysis:", heading_analysis)
-            
-        with st.spinner("Generating optimized content structure..."):
-            optimized_structure = generate_optimized_structure(keyword, heading_analysis, api_key)
-            if optimized_structure:
-                st.write("Optimized Content Structure:")
-                st.text(optimized_structure)
+            if not urls:
+                st.error("No URLs were extracted. Please try a different keyword or try again later.")
+            else:
+                all_headings = []
+                for url in urls:
+                    time.sleep(random.uniform(1, 3))  # Random delay to avoid rate limiting
+                    headings = extract_headings(url)
+                    all_headings.append(headings)
+                    st.write(f"Headings extracted from {url}:")
+                    st.write(headings)
                 
-                # Create and offer Word document download
-                doc = create_word_document(keyword, optimized_structure)
-                bio = BytesIO()
-                doc.save(bio)
-                st.download_button(
-                    label="Download Content Brief",
-                    data=bio.getvalue(),
-                    file_name=f"content_brief_{keyword.replace(' ', '_')}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
+                heading_analysis = analyze_headings(all_headings)
+                st.write("Heading Analysis:", heading_analysis)
+                
+                with st.spinner("Generating optimized content structure..."):
+                    optimized_structure = generate_optimized_structure(keyword, heading_analysis, api_key)
+                    if optimized_structure:
+                        st.write("Optimized Content Structure:")
+                        st.text(optimized_structure)
+                        
+                        # Create and offer Word document download
+                        doc = create_word_document(keyword, optimized_structure)
+                        bio = BytesIO()
+                        doc.save(bio)
+                        st.download_button(
+                            label="Download Content Brief",
+                            data=bio.getvalue(),
+                            file_name=f"content_brief_{keyword.replace(' ', '_')}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
     else:
         st.error("Please enter both your OpenAI API key and a target keyword to generate a content outline.")
