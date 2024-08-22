@@ -15,6 +15,19 @@ from serpapi import GoogleSearch
 st.set_page_config(page_title="SEO Content Outline Generator", layout="wide")
 st.title("SEO Content Outline Generator")
 
+# Author information and instructions
+st.write("Created by Brandon Lazovic")
+st.markdown("""
+## How to use this tool:
+1. Enter your OpenAI and SerpApi API keys in the fields below.
+2. Input your target keyword.
+3. Click 'Generate Content Outline' to analyze top-ranking pages and create an optimized content structure.
+4. Review the extracted subheads from top results and the AI-generated optimized outline.
+5. Download the content brief as a Word document.
+
+This tool helps content creators and SEO professionals generate comprehensive, SEO-optimized content outlines based on top-ranking pages for any given keyword.
+""")
+
 # Initialize session state
 if 'openai_api_key' not in st.session_state:
     st.session_state.openai_api_key = ''
@@ -40,10 +53,6 @@ def get_top_urls(keyword, serpapi_key, num_results=5):
         urls = []
         for result in results.get("organic_results", [])[:num_results]:
             urls.append(result["link"])
-        
-        st.write(f"Extracted {len(urls)} URLs:")
-        for url in urls:
-            st.write(url)
         
         return urls
     except Exception as e:
@@ -131,7 +140,7 @@ def generate_optimized_structure(keyword, heading_analysis, api_key):
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an SEO expert creating optimized, user-focused content outlines for any given topic."},
                 {"role": "user", "content": prompt}
@@ -168,19 +177,36 @@ def create_word_document(keyword, optimized_structure):
     doc.add_paragraph(f'Content Brief: {keyword}', style='H1')
     
     # Process the optimized structure
-    for line in optimized_structure.split('\n'):
+    lines = optimized_structure.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
         if line.startswith('H2:'):
             doc.add_paragraph(line[3:].strip(), style='H2')
+            i += 1
+            # Add content for H2
+            while i < len(lines) and lines[i].strip().startswith('-'):
+                doc.add_paragraph(lines[i].strip(), style='List Bullet')
+                i += 1
         elif line.startswith('H3:'):
             doc.add_paragraph(line[3:].strip(), style='H3')
+            i += 1
+            # Add content for H3
+            while i < len(lines) and lines[i].strip().startswith('-'):
+                doc.add_paragraph(lines[i].strip(), style='List Bullet')
+                i += 1
         elif line.startswith('H4:'):
             doc.add_paragraph(line[3:].strip(), style='H4')
-        elif line.strip().startswith('-'):
-            doc.add_paragraph(line.strip(), style='List Bullet')
+            i += 1
+            # Add content for H4
+            while i < len(lines) and lines[i].strip().startswith('-'):
+                doc.add_paragraph(lines[i].strip(), style='List Bullet')
+                i += 1
+        else:
+            i += 1
     
     return doc
 
-# Streamlit UI
 # Streamlit UI
 st.write("Enter your API keys and target keyword below:")
 
@@ -204,12 +230,12 @@ if st.button("Generate Content Outline"):
                 for url in urls:
                     time.sleep(random.uniform(1, 3))  # Random delay to avoid rate limiting
                     headings = extract_headings(url)
-                    all_headings.append(headings)
+                    all_headings.append((url, headings))
                 
                 # Display extracted subheads
                 st.subheader("Extracted Subheads from Top Results:")
-                for i, headings in enumerate(all_headings, 1):
-                    st.write(f"URL {i}:")
+                for i, (url, headings) in enumerate(all_headings, 1):
+                    st.write(f"URL {i}: {url}")
                     for level in ["h2", "h3", "h4"]:
                         if headings[level]:
                             st.write(f"{level.upper()}:")
@@ -217,7 +243,7 @@ if st.button("Generate Content Outline"):
                                 st.write(f"- {heading}")
                     st.write("---")
                 
-                heading_analysis = analyze_headings(all_headings)
+                heading_analysis = analyze_headings([h for _, h in all_headings])
                 
                 with st.spinner("Generating optimized content structure..."):
                     optimized_structure = generate_optimized_structure(keyword, heading_analysis, openai_api_key)
