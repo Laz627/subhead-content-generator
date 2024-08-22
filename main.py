@@ -3,7 +3,6 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote_plus
 from collections import Counter
-import trafilatura
 from openai import OpenAI
 from docx import Document
 from io import BytesIO
@@ -14,7 +13,12 @@ import random
 st.set_page_config(page_title="SEO Content Outline Generator", layout="wide")
 st.title("SEO Content Outline Generator")
 
-# Function to get top 5 Google search results
+# Initialize session state
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = ''
+if 'keyword' not in st.session_state:
+    st.session_state.keyword = ''
+
 def get_top_urls(keyword, num_results=5):
     url = f"https://www.google.com/search?q={quote_plus(keyword)}&num={num_results+5}"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
@@ -27,22 +31,39 @@ def get_top_urls(keyword, num_results=5):
             urls.append(result["href"])
     return urls
 
-# Function to extract headings from a URL
 def extract_headings(url):
     try:
-        downloaded = trafilatura.fetch_url(url)
-        soup = BeautifulSoup(trafilatura.extract(downloaded), "html.parser")
-        headings = {
-            "h2": [h.text.strip() for h in soup.find_all("h2")],
-            "h3": [h.text.strip() for h in soup.find_all("h3")],
-            "h4": [h.text.strip() for h in soup.find_all("h4")]
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        # Try to identify the main content area
+        main_content = soup.find('main') or soup.find('article') or soup.find('div', class_='content') or soup.find('div', id='content')
+        
+        if main_content:
+            content_to_search = main_content
+        else:
+            # If we can't identify a clear main content area, use the whole body
+            # but exclude common non-content areas
+            for element in soup(['header', 'nav', 'footer', 'aside']):
+                element.decompose()
+            content_to_search = soup.body
+        
+        headings = {
+            "h2": [h.text.strip() for h in content_to_search.find_all("h2") if h.text.strip()],
+            "h3": [h.text.strip() for h in content_to_search.find_all("h3") if h.text.strip()],
+            "h4": [h.text.strip() for h in content_to_search.find_all("h4") if h.text.strip()]
+        }
+        
         return headings
     except Exception as e:
         st.warning(f"Error extracting headings from {url}: {str(e)}")
         return {"h2": [], "h3": [], "h4": []}
 
-# Function to analyze headings
 def analyze_headings(all_headings):
     analysis = {}
     for level in ["h2", "h3", "h4"]:
@@ -54,7 +75,6 @@ def analyze_headings(all_headings):
         }
     return analysis
 
-# Function to generate optimized heading structure using GPT-4
 def generate_optimized_structure(keyword, heading_analysis, api_key):
     client = OpenAI(api_key=api_key)
     
@@ -95,7 +115,6 @@ def generate_optimized_structure(keyword, heading_analysis, api_key):
         st.error(f"Error generating optimized structure: {str(e)}")
         return None
 
-# Function to create Word document
 def create_word_document(keyword, optimized_structure):
     doc = Document()
     doc.add_heading(f'Content Brief: {keyword}', 0)
@@ -113,35 +132,48 @@ def create_word_document(keyword, optimized_structure):
     return doc
 
 # Streamlit UI
-api_key = st.text_input("Enter your OpenAI API key:", type="password")
-keyword = st.text_input("Enter your target keyword:")
+st.write("Enter your OpenAI API key and target keyword below:")
 
-if st.button("Generate Content Outline") and api_key and keyword:
-    with st.spinner("Analyzing top search results..."):
-        urls = get_top_urls(keyword)
-        all_headings = []
-        for url in urls:
-            time.sleep(random.uniform(1, 3))  # Random delay to avoid rate limiting
-            all_headings.append(extract_headings(url))
-        
-        heading_analysis = analyze_headings(all_headings)
-        st.write("Heading Analysis:", heading_analysis)
-        
-    with st.spinner("Generating optimized content structure..."):
-        optimized_structure = generate_optimized_structure(keyword, heading_analysis, api_key)
-        if optimized_structure:
-            st.write("Optimized Content Structure:")
-            st.text(optimized_structure)
+api_key = st.text_input("OpenAI API key:", value=st.session_state.api_key, type="password")
+keyword = st.text_input("Target keyword:", value=st.session_state.keyword)
+
+# Update session state
+st.session_state.api_key = api_key
+st.session_state.keyword = keyword
+
+if st.button("Generate Content Outline"):
+    if api_key and keyword:
+        with st.spinner("Analyzing top search results..."):
+            urls = get_top_urls(keyword)
+            st.write("Extracted URLs:")
+            st.write(urls)
             
-            # Create and offer Word document download
-            doc = create_word_document(keyword, optimized_structure)
-            bio = BytesIO()
-            doc.save(bio)
-            st.download_button(
-                label="Download Content Brief",
-                data=bio.getvalue(),
-                file_name=f"content_brief_{keyword.replace(' ', '_')}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
-else:
-    st.write("Please enter your OpenAI API key and a target keyword to generate a content outline.")
+            all_headings = []
+            for url in urls:
+                time.sleep(random.uniform(1, 3))  # Random delay to avoid rate limiting
+                headings = extract_headings(url)
+                all_headings.append(headings)
+                st.write(f"Headings extracted from {url}:")
+                st.write(headings)
+            
+            heading_analysis = analyze_headings(all_headings)
+            st.write("Heading Analysis:", heading_analysis)
+            
+        with st.spinner("Generating optimized content structure..."):
+            optimized_structure = generate_optimized_structure(keyword, heading_analysis, api_key)
+            if optimized_structure:
+                st.write("Optimized Content Structure:")
+                st.text(optimized_structure)
+                
+                # Create and offer Word document download
+                doc = create_word_document(keyword, optimized_structure)
+                bio = BytesIO()
+                doc.save(bio)
+                st.download_button(
+                    label="Download Content Brief",
+                    data=bio.getvalue(),
+                    file_name=f"content_brief_{keyword.replace(' ', '_')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+    else:
+        st.error("Please enter both your OpenAI API key and a target keyword to generate a content outline.")
