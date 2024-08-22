@@ -127,7 +127,8 @@ def generate_optimized_structure(keyword, heading_analysis, api_key):
     9. Consider including a section on practical application or next steps for the reader.
     10. Ensure the outline covers the topic thoroughly while remaining focused and relevant to the main keyword.
 
-    Provide the output in the following format:
+    IMPORTANT: Do not use any markdown syntax (such as ##, ###, or *) in your output. Use only the following format:
+
     H2: [Heading based on examples and best practices]
     - [Brief direction on content]
       H3: [Subheading based on examples and best practices]
@@ -142,17 +143,26 @@ def generate_optimized_structure(keyword, heading_analysis, api_key):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an SEO expert creating optimized, user-focused content outlines for any given topic."},
+                {"role": "system", "content": "You are an SEO expert creating optimized, user-focused content outlines for any given topic. Do not use markdown syntax in your output."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7
         )
-        return response.choices[0].message.content
+        
+        # Clean the output to remove any markdown that might have slipped through
+        output = response.choices[0].message.content
+        output = output.replace('#', '').replace('*', '').replace('_', '')
+        
+        return output
     except Exception as e:
         st.error(f"Error generating optimized structure: {str(e)}")
         return None
 
 def create_word_document(keyword, optimized_structure):
+    if not optimized_structure:
+        st.error("No content to create document. Please try again.")
+        return None
+
     doc = Document()
     
     # Add styles
@@ -253,13 +263,16 @@ if st.button("Generate Content Outline"):
                         
                         # Create and offer Word document download
                         doc = create_word_document(keyword, optimized_structure)
-                        bio = BytesIO()
-                        doc.save(bio)
-                        st.download_button(
-                            label="Download Content Brief",
-                            data=bio.getvalue(),
-                            file_name=f"content_brief_{keyword.replace(' ', '_')}.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
+                        if doc:
+                            bio = BytesIO()
+                            doc.save(bio)
+                            st.download_button(
+                                label="Download Content Brief",
+                                data=bio.getvalue(),
+                                file_name=f"content_brief_{keyword.replace(' ', '_')}.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                    else:
+                        st.error("Failed to generate optimized structure. Please try again.")
     else:
         st.error("Please enter your OpenAI API key, SerpApi API key, and a target keyword to generate a content outline.")
