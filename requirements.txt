@@ -4,3 +4,4 @@ beautifulsoup4
 trafilatura 
 openai 
 python-docx
+google-search-results
