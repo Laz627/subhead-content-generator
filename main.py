@@ -4,6 +4,8 @@ from bs4 import BeautifulSoup
 from collections import Counter
 from openai import OpenAI
 from docx import Document
+from docx.shared import Pt
+from docx.enum.style import WD_STYLE_TYPE
 from io import BytesIO
 import time
 import random
@@ -88,7 +90,8 @@ def analyze_headings(all_headings):
         analysis[level] = {
             "count": len(headings),
             "avg_length": sum(len(h) for h in headings) / len(headings) if headings else 0,
-            "common_words": Counter(" ".join(headings).lower().split()).most_common(10)
+            "common_words": Counter(" ".join(headings).lower().split()).most_common(10),
+            "examples": headings[:10]  # Include up to 10 example headings
         }
     return analysis
 
@@ -101,21 +104,24 @@ def generate_optimized_structure(keyword, heading_analysis, api_key):
     Use the following heading analysis as a guide:
     {heading_analysis}
     
+    Pay special attention to the 'examples' in each heading level, as these are actual headings from top-ranking pages.
+    
     Requirements:
-    - Create a structure with H2s, H3s, and H4s
+    - Create a structure with H2s, H3s, and H4s that closely mirrors the examples provided
     - Incorporate common themes and words from the analysis
     - Ensure the structure is comprehensive and covers the topic thoroughly
     - Include brief directions on what content should be included under each heading
+    - Maintain a similar style and tone to the example headings
     
     Provide the output in the following format:
-    H2: [Heading]
+    H2: [Heading based on examples]
     - [Brief direction on content]
-      H3: [Subheading]
+      H3: [Subheading based on examples]
       - [Brief direction on content]
-        H4: [Sub-subheading]
+        H4: [Sub-subheading based on examples]
         - [Brief direction on content]
     
-    Repeat this structure for multiple H2s, H3s, and H4s as needed.
+    Repeat this structure for multiple H2s, H3s, and H4s as needed, closely following the example headings provided.
     """
     
     try:
@@ -134,15 +140,36 @@ def generate_optimized_structure(keyword, heading_analysis, api_key):
 
 def create_word_document(keyword, optimized_structure):
     doc = Document()
-    doc.add_heading(f'Content Brief: {keyword}', 0)
     
+    # Add styles
+    styles = doc.styles
+    h1_style = styles.add_style('H1', WD_STYLE_TYPE.PARAGRAPH)
+    h1_style.font.size = Pt(18)
+    h1_style.font.bold = True
+    
+    h2_style = styles.add_style('H2', WD_STYLE_TYPE.PARAGRAPH)
+    h2_style.font.size = Pt(16)
+    h2_style.font.bold = True
+    
+    h3_style = styles.add_style('H3', WD_STYLE_TYPE.PARAGRAPH)
+    h3_style.font.size = Pt(14)
+    h3_style.font.bold = True
+    
+    h4_style = styles.add_style('H4', WD_STYLE_TYPE.PARAGRAPH)
+    h4_style.font.size = Pt(12)
+    h4_style.font.bold = True
+    
+    # Add title
+    doc.add_paragraph(f'Content Brief: {keyword}', style='H1')
+    
+    # Process the optimized structure
     for line in optimized_structure.split('\n'):
         if line.startswith('H2:'):
-            doc.add_heading(line[3:].strip(), level=2)
+            doc.add_paragraph(line[3:].strip(), style='H2')
         elif line.startswith('H3:'):
-            doc.add_heading(line[3:].strip(), level=3)
+            doc.add_paragraph(line[3:].strip(), style='H3')
         elif line.startswith('H4:'):
-            doc.add_heading(line[3:].strip(), level=4)
+            doc.add_paragraph(line[3:].strip(), style='H4')
         elif line.strip().startswith('-'):
             doc.add_paragraph(line.strip(), style='List Bullet')
     
