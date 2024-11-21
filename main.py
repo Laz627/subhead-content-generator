@@ -111,15 +111,17 @@ Instructions:
 
 1. Based on the competitor data, recommend an optimized meta title, meta description, and H1 tag for a new page targeting the keyword.
 2. Generate an optimized heading structure (H2s, H3s, H4s) for the new page, ensuring it covers all important topics and subtopics.
-3. Ensure the structure flows cohesively, focusing on what users should know about the topic.
-4. Avoid using branded subheads unless absolutely necessary for the topic.
-5. Include brief directions on what content should be included under each heading.
-6. Organize the content in a way that naturally progresses from basic concepts to more advanced ideas.
-7. Include sections that address common questions or concerns related to the topic.
-8. Where applicable, include comparisons with alternatives or related concepts.
-9. Consider including a section on practical application or next steps for the reader.
-10. If you identify any important topics or subtopics not covered in the competitor headings, include them in your content outline to ensure topical completeness.
-11. Ensure the outline covers the topic thoroughly while remaining focused and relevant to the main keyword.
+3. Include H3s and H4s where appropriate to create a detailed and hierarchical content structure, even if they aren't present in the competitor data.
+4. Ensure the structure flows cohesively, focusing on what users should know about the topic.
+5. Avoid using branded subheads unless absolutely necessary for the topic.
+6. Include brief directions on what content should be included under each heading.
+7. Organize the content in a way that naturally progresses from basic concepts to more advanced ideas.
+8. Include sections that address common questions or concerns related to the topic.
+9. Where applicable, include comparisons with alternatives or related concepts.
+10. Consider including a section on practical application or next steps for the reader.
+11. If you identify any important topics or subtopics not covered in the competitor headings, include them in your content outline to ensure topical completeness.
+12. Provide a final summary discussing what you found and what should be included for the topic.
+13. Ensure the outline covers the topic thoroughly while remaining focused and relevant to the main keyword.
 
 IMPORTANT: Use markdown syntax for bold text and headings. Present the recommendations in a clear, structured format using markdown.
 
@@ -155,7 +157,13 @@ For each heading:
 
 ---
 
-Ensure that the headings are properly formatted using markdown (e.g., `**H2: Heading Title**`).
+**Final Summary**
+
+Your summary here
+
+---
+
+Ensure that the headings are properly formatted using markdown (e.g., `**H2: Heading Title**`, `**H3: Subheading Title**`).
 
 """
 
@@ -185,13 +193,13 @@ def create_word_document(keyword, optimized_structure):
     # Modify built-in styles
     styles = doc.styles
 
-    # Modify 'Heading 1' style
-    h1_style = styles['Heading 1']
-    h1_font = h1_style.font
-    h1_font.size = Pt(18)
-    h1_font.bold = True
-    h1_style.paragraph_format.space_before = Pt(0)
-    h1_style.paragraph_format.space_after = Pt(0)
+    # Modify 'Heading 4' style for Meta Recommendations
+    h4_style = styles['Heading 4']
+    h4_font = h4_style.font
+    h4_font.size = Pt(12)
+    h4_font.bold = True
+    h4_style.paragraph_format.space_before = Pt(0)
+    h4_style.paragraph_format.space_after = Pt(0)
 
     # Modify 'Heading 2' style
     h2_style = styles['Heading 2']
@@ -209,13 +217,7 @@ def create_word_document(keyword, optimized_structure):
     h3_style.paragraph_format.space_before = Pt(0)
     h3_style.paragraph_format.space_after = Pt(0)
 
-    # Modify 'Heading 4' style
-    h4_style = styles['Heading 4']
-    h4_font = h4_style.font
-    h4_font.size = Pt(12)
-    h4_font.bold = True
-    h4_style.paragraph_format.space_before = Pt(0)
-    h4_style.paragraph_format.space_after = Pt(0)
+    # Modify 'Heading 4' style (already modified above)
 
     # Add title
     doc.add_heading(f'Content Brief: {keyword}', level=1)
@@ -225,13 +227,15 @@ def create_word_document(keyword, optimized_structure):
     for line in lines:
         line = line.strip()
         if line.startswith('**Meta Title Recommendation:**'):
-            doc.add_heading('Meta Title Recommendation', level=1)
+            doc.add_heading('Meta Title Recommendation', level=4)
         elif line.startswith('**Meta Description Recommendation:**'):
-            doc.add_heading('Meta Description Recommendation', level=1)
+            doc.add_heading('Meta Description Recommendation', level=4)
         elif line.startswith('**H1 Tag Recommendation:**'):
-            doc.add_heading('H1 Tag Recommendation', level=1)
+            doc.add_heading('H1 Tag Recommendation', level=4)
         elif line.startswith('**Content Outline:**'):
             doc.add_heading('Content Outline', level=1)
+        elif line.startswith('**Final Summary**'):
+            doc.add_heading('Final Summary', level=1)
         elif line.startswith('**H2:'):
             heading_text = line.replace('**H2:', '').replace('**', '').strip()
             doc.add_heading(f"H2: {heading_text}", level=2)
@@ -249,7 +253,7 @@ def create_word_document(keyword, optimized_structure):
         elif line == '---':
             continue
         else:
-            # Handle other lines, such as recommendations
+            # Handle other lines, such as recommendations or summary
             paragraph = doc.add_paragraph(line)
             paragraph.paragraph_format.space_before = Pt(0)
             paragraph.paragraph_format.space_after = Pt(0)
