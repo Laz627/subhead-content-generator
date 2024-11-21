@@ -1,5 +1,4 @@
 import streamlit as st
-import requests
 from bs4 import BeautifulSoup
 from collections import Counter
 from openai import OpenAI
@@ -7,71 +6,54 @@ from docx import Document
 from docx.shared import Pt
 from docx.enum.style import WD_STYLE_TYPE
 from io import BytesIO
-import time
-import random
-from serpapi import GoogleSearch
 
 # Set page config
 st.set_page_config(page_title="SEO Content Outline Generator", layout="wide")
 st.title("SEO Content Outline Generator")
 
-# Author information and instructions
-st.write("Created by Brandon Lazovic")
+# Instructions
 st.markdown("""
 ## How to use this tool:
-1. Enter your OpenAI and SerpApi API keys in the fields below.
-2. Input your target keyword.
-3. Click 'Generate Content Outline' to analyze top-ranking pages and create an optimized content structure.
-4. Review the extracted subheads from top results and the AI-generated optimized outline.
-5. Download the content brief as a Word document.
+1. **Enter your OpenAI API key** in the field below.
+2. **Input your target keyword.**
+3. **Upload competitor HTML files** for comparison.
+4. Click **'Generate Content Outline'** to analyze competitor content and create an optimized content structure.
+5. Review the extracted subheads from the competitor content and the AI-generated optimized outline.
+6. **Download the content brief** as a Word document.
 
-This tool helps content creators and SEO professionals generate comprehensive, SEO-optimized content outlines based on top-ranking pages for any given keyword.
+This tool helps content creators and SEO professionals generate comprehensive, SEO-optimized content outlines based on competitor content for any given keyword.
 """)
 
 # Initialize session state
 if 'openai_api_key' not in st.session_state:
     st.session_state.openai_api_key = ''
-if 'serpapi_api_key' not in st.session_state:
-    st.session_state.serpapi_api_key = ''
 if 'keyword' not in st.session_state:
     st.session_state.keyword = ''
 
-def get_top_urls(keyword, serpapi_key, num_results=5):
-    params = {
-        "api_key": serpapi_key,
-        "engine": "google",
-        "q": keyword,
-        "num": num_results,
-        "gl": "us",
-        "hl": "en"
-    }
-    
+def extract_headings_from_html(html_content):
     try:
-        search = GoogleSearch(params)
-        results = search.get_dict()
-        
-        urls = []
-        for result in results.get("organic_results", [])[:num_results]:
-            urls.append(result["link"])
-        
-        return urls
-    except Exception as e:
-        st.error(f"Error fetching search results: {str(e)}")
-        return []
+        soup = BeautifulSoup(html_content, "html.parser")
 
-def extract_headings(url):
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.text, "html.parser")
-        
+        # Remove navigation and footer elements
+        tags_to_remove = ['script', 'style', 'noscript', 'header', 'footer', 'nav', 'aside']
+        for tag in tags_to_remove:
+            for element in soup.find_all(tag):
+                element.decompose()
+
+        # Remove elements by common class and ID names
+        classes_ids_to_remove = ['nav', 'navigation', 'sidebar', 'footer', 'header', 'menu',
+                                 'breadcrumbs', 'breadcrumb', 'site-footer', 'site-header',
+                                 'widget', 'widgets', 'site-navigation', 'main-navigation',
+                                 'secondary-navigation', 'site-sidebar']
+        for class_or_id in classes_ids_to_remove:
+            for element in soup.find_all(attrs={'class': class_or_id}):
+                element.decompose()
+            for element in soup.find_all(attrs={'id': class_or_id}):
+                element.decompose()
+
         # Try to identify the main content area
         main_content = soup.find('main') or soup.find('article') or soup.find('div', class_='content') or soup.find('div', id='content')
-        
+
         if main_content:
             content_to_search = main_content
         else:
@@ -80,21 +62,27 @@ def extract_headings(url):
             for element in soup(['header', 'nav', 'footer', 'aside']):
                 element.decompose()
             content_to_search = soup.body
-        
+
         headings = {
-            "h2": [h.text.strip() for h in content_to_search.find_all("h2") if h.text.strip()],
-            "h3": [h.text.strip() for h in content_to_search.find_all("h3") if h.text.strip()],
-            "h4": [h.text.strip() for h in content_to_search.find_all("h4") if h.text.strip()]
+            "h1": [h.get_text(separator=' ', strip=True) for h in content_to_search.find_all("h1") if h.get_text(strip=True)],
+            "h2": [h.get_text(separator=' ', strip=True) for h in content_to_search.find_all("h2") if h.get_text(strip=True)],
+            "h3": [h.get_text(separator=' ', strip=True) for h in content_to_search.find_all("h3") if h.get_text(strip=True)],
+            "h4": [h.get_text(separator=' ', strip=True) for h in content_to_search.find_all("h4") if h.get_text(strip=True)]
         }
-        
-        return headings
+
+        # Extract meta title and description
+        meta_title = soup.title.string.strip() if soup.title else ''
+        meta_description_tag = soup.find('meta', attrs={'name': 'description'})
+        meta_description = meta_description_tag['content'].strip() if meta_description_tag else ''
+
+        return meta_title, meta_description, headings
     except Exception as e:
-        st.warning(f"Error extracting headings from {url}: {str(e)}")
-        return {"h2": [], "h3": [], "h4": []}
+        st.warning(f"Error extracting headings: {str(e)}")
+        return '', '', {"h1": [], "h2": [], "h3": [], "h4": []}
 
 def analyze_headings(all_headings):
     analysis = {}
-    for level in ["h2", "h3", "h4"]:
+    for level in ["h1", "h2", "h3", "h4"]:
         headings = [h for url_headings in all_headings for h in url_headings[level]]
         analysis[level] = {
             "count": len(headings),
@@ -104,55 +92,81 @@ def analyze_headings(all_headings):
         }
     return analysis
 
-def generate_optimized_structure(keyword, heading_analysis, api_key):
+def generate_optimized_structure(keyword, heading_analysis, competitor_meta_info, api_key):
     client = OpenAI(api_key=api_key)
-    
+
     prompt = f"""
-    Generate an optimized heading structure for a content brief on the keyword: "{keyword}"
-    
-    Use the following heading analysis as a guide:
-    {heading_analysis}
-    
-    Pay special attention to the 'examples' in each heading level, as these are actual headings from top-ranking pages.
-    
-    Requirements:
-    1. Create a logical, user-focused structure with H2s, H3s, and H4s that guides the reader through understanding the topic comprehensively.
-    2. Ensure the structure flows cohesively, focusing on what users should know about the topic.
-    3. Avoid using branded subheads unless absolutely necessary for the topic.
-    4. Include brief directions on what content should be included under each heading.
-    5. Maintain a similar style and tone to the example headings while improving clarity and user focus.
-    6. Organize the content in a way that naturally progresses from basic concepts to more advanced ideas.
-    7. Include sections that address common questions or concerns related to the topic.
-    8. Where applicable, include comparisons with alternatives or related concepts.
-    9. Consider including a section on practical application or next steps for the reader.
-    10. Ensure the outline covers the topic thoroughly while remaining focused and relevant to the main keyword.
+You are an SEO content strategist.
 
-    IMPORTANT: Do not use any markdown syntax (such as ##, ###, or *) in your output. Use only the following format:
+Your task is to analyze the provided competitor headings and meta information to generate specific, actionable recommendations for creating a new, optimized content outline.
 
-    H2: [Heading based on examples and best practices]
-    - [Brief direction on content]
-      H3: [Subheading based on examples and best practices]
-      - [Brief direction on content]
-        H4: [Sub-subheading based on examples and best practices]
-        - [Brief direction on content]
-    
-    Repeat this structure as needed, ensuring a logical flow of information that best serves the user's needs based on the given keyword.
-    """
-    
+- **Keyword**: "{keyword}"
+
+- **Competitor Meta Information and Headings**:
+{competitor_meta_info}
+
+Instructions:
+
+1. Based on the competitor data, recommend an optimized meta title, meta description, and H1 tag for a new page targeting the keyword.
+2. Generate an optimized heading structure (H2s, H3s, H4s) for the new page, ensuring it covers all important topics and subtopics.
+3. Ensure the structure flows cohesively, focusing on what users should know about the topic.
+4. Avoid using branded subheads unless absolutely necessary for the topic.
+5. Include brief directions on what content should be included under each heading.
+6. Organize the content in a way that naturally progresses from basic concepts to more advanced ideas.
+7. Include sections that address common questions or concerns related to the topic.
+8. Where applicable, include comparisons with alternatives or related concepts.
+9. Consider including a section on practical application or next steps for the reader.
+10. Ensure the outline covers the topic thoroughly while remaining focused and relevant to the main keyword.
+
+IMPORTANT: Use markdown syntax for bold text and headings. Present the recommendations in a clear, structured format using markdown.
+
+Format:
+
+**Meta Title Recommendation:**
+
+Your recommendation here
+
+---
+
+**Meta Description Recommendation:**
+
+Your recommendation here
+
+---
+
+**H1 Tag Recommendation:**
+
+Your recommendation here
+
+---
+
+**Content Outline:**
+
+For each heading:
+
+---
+
+**[Heading Level and Title]**
+
+- **Content Guidance:** Brief description of what to include under this heading
+
+---
+
+Ensure that the headings are properly formatted using markdown (e.g., `**H2: Heading Title**`).
+
+"""
+
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an SEO expert creating optimized, user-focused content outlines for any given topic. Do not use markdown syntax in your output."},
+                {"role": "system", "content": "Provide detailed SEO content recommendations based on the analysis."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7
+            temperature=0.5
         )
-        
-        # Clean the output to remove any markdown that might have slipped through
+
         output = response.choices[0].message.content
-        output = output.replace('#', '').replace('*', '').replace('_', '')
-        
         return output
     except Exception as e:
         st.error(f"Error generating optimized structure: {str(e)}")
@@ -164,115 +178,126 @@ def create_word_document(keyword, optimized_structure):
         return None
 
     doc = Document()
-    
+
     # Add styles
     styles = doc.styles
     h1_style = styles.add_style('H1', WD_STYLE_TYPE.PARAGRAPH)
     h1_style.font.size = Pt(18)
     h1_style.font.bold = True
-    
+
     h2_style = styles.add_style('H2', WD_STYLE_TYPE.PARAGRAPH)
     h2_style.font.size = Pt(16)
     h2_style.font.bold = True
-    
+
     h3_style = styles.add_style('H3', WD_STYLE_TYPE.PARAGRAPH)
     h3_style.font.size = Pt(14)
     h3_style.font.bold = True
-    
+
     h4_style = styles.add_style('H4', WD_STYLE_TYPE.PARAGRAPH)
     h4_style.font.size = Pt(12)
     h4_style.font.bold = True
-    
+
     # Add title
     doc.add_paragraph(f'Content Brief: {keyword}', style='H1')
-    
+
     # Process the optimized structure
-    lines = optimized_structure.split('\n')
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        if line.startswith('H2:'):
-            doc.add_paragraph(f"H2: {line[3:].strip()}", style='H2')
-            i += 1
-            # Add content for H2
-            while i < len(lines) and lines[i].strip().startswith('-'):
-                doc.add_paragraph(lines[i].strip(), style='List Bullet')
-                i += 1
-        elif line.startswith('H3:'):
-            doc.add_paragraph(f"H3: {line[3:].strip()}", style='H3')
-            i += 1
-            # Add content for H3
-            while i < len(lines) and lines[i].strip().startswith('-'):
-                doc.add_paragraph(lines[i].strip(), style='List Bullet')
-                i += 1
-        elif line.startswith('H4:'):
-            doc.add_paragraph(f"H4: {line[3:].strip()}", style='H4')
-            i += 1
-            # Add content for H4
-            while i < len(lines) and lines[i].strip().startswith('-'):
-                doc.add_paragraph(lines[i].strip(), style='List Bullet')
-                i += 1
+    lines = optimized_structure.strip().split('\n')
+    for line in lines:
+        line = line.strip()
+        if line.startswith('**Meta Title Recommendation:**'):
+            doc.add_heading('Meta Title Recommendation', level=1)
+        elif line.startswith('**Meta Description Recommendation:**'):
+            doc.add_heading('Meta Description Recommendation', level=1)
+        elif line.startswith('**H1 Tag Recommendation:**'):
+            doc.add_heading('H1 Tag Recommendation', level=1)
+        elif line.startswith('**Content Outline:**'):
+            doc.add_heading('Content Outline', level=1)
+        elif line.startswith('**H2:'):
+            heading_text = line.replace('**H2:', '').replace('**', '').strip()
+            doc.add_heading(heading_text, level=2)
+        elif line.startswith('**H3:'):
+            heading_text = line.replace('**H3:', '').replace('**', '').strip()
+            doc.add_heading(heading_text, level=3)
+        elif line.startswith('**H4:'):
+            heading_text = line.replace('**H4:', '').replace('**', '').strip()
+            doc.add_heading(heading_text, level=4)
+        elif line.startswith('- **Content Guidance:**'):
+            content_guidance = line.replace('- **Content Guidance:**', '').strip()
+            doc.add_paragraph(content_guidance)
+        elif line == '---':
+            continue
         else:
-            i += 1
-    
+            doc.add_paragraph(line)
+
     return doc
 
 # Streamlit UI
-st.write("Enter your API keys and target keyword below:")
+st.write("Enter your API key and target keyword below:")
 
 openai_api_key = st.text_input("OpenAI API key:", value=st.session_state.openai_api_key, type="password")
-serpapi_api_key = st.text_input("SerpApi API key:", value=st.session_state.serpapi_api_key, type="password")
 keyword = st.text_input("Target keyword:", value=st.session_state.keyword)
 
 # Update session state
 st.session_state.openai_api_key = openai_api_key
-st.session_state.serpapi_api_key = serpapi_api_key
 st.session_state.keyword = keyword
 
+# File uploader for competitor HTML files
+uploaded_competitor_files = st.file_uploader(
+    "Upload competitor HTML files (you can select multiple files):",
+    type=['html', 'htm'],
+    accept_multiple_files=True
+)
+
 if st.button("Generate Content Outline"):
-    if openai_api_key and serpapi_api_key and keyword:
-        with st.spinner("Analyzing top search results..."):
-            urls = get_top_urls(keyword, serpapi_api_key)
-            if not urls:
-                st.error("No URLs were extracted. Please check your SerpApi key and try again.")
-            else:
-                all_headings = []
-                for url in urls:
-                    time.sleep(random.uniform(1, 3))  # Random delay to avoid rate limiting
-                    headings = extract_headings(url)
-                    all_headings.append((url, headings))
-                
-                # Display extracted subheads
-                st.subheader("Extracted Subheads from Top Results:")
-                for i, (url, headings) in enumerate(all_headings, 1):
-                    st.write(f"URL {i}: {url}")
-                    for level in ["h2", "h3", "h4"]:
-                        if headings[level]:
-                            st.write(f"{level.upper()}:")
-                            for heading in headings[level]:
-                                st.write(f"- {heading}")
-                    st.write("---")
-                
-                heading_analysis = analyze_headings([h for _, h in all_headings])
-                
-                with st.spinner("Generating optimized content structure..."):
-                    optimized_structure = generate_optimized_structure(keyword, heading_analysis, openai_api_key)
-                    if optimized_structure:
-                        st.subheader("Optimized Content Structure:")
-                        st.text(optimized_structure)
-                        
-                        # Create and offer Word document download
-                        doc = create_word_document(keyword, optimized_structure)
-                        if doc:
-                            bio = BytesIO()
-                            doc.save(bio)
-                            st.download_button(
-                                label="Download Content Brief",
-                                data=bio.getvalue(),
-                                file_name=f"content_brief_{keyword.replace(' ', '_')}.docx",
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            )
-                    else:
-                        st.error("Failed to generate optimized structure. Please try again.")
+    if openai_api_key and keyword and uploaded_competitor_files:
+        with st.spinner("Analyzing competitor content..."):
+            all_headings = []
+            competitor_meta_info = ''
+            for idx, file in enumerate(uploaded_competitor_files, 1):
+                html_content = file.read().decode('utf-8')
+                meta_title, meta_description, headings = extract_headings_from_html(html_content)
+                all_headings.append(headings)
+
+                competitor_meta_info += f"Competitor #{idx} Meta Title: {meta_title}\n"
+                competitor_meta_info += f"Competitor #{idx} Meta Description: {meta_description}\n"
+                competitor_headings_str = ''
+                for level in ["h1", "h2", "h3", "h4"]:
+                    for heading in headings[level]:
+                        competitor_headings_str += f"{level.upper()}: {heading}\n"
+                competitor_meta_info += f"Competitor #{idx} Headings:\n{competitor_headings_str}\n\n"
+
+            # Display extracted subheads
+            st.subheader("Extracted Subheads from Competitor Content:")
+            for idx, headings in enumerate(all_headings, 1):
+                st.write(f"Competitor #{idx}:")
+                for level in ["h1", "h2", "h3", "h4"]:
+                    if headings[level]:
+                        st.write(f"{level.upper()}:")
+                        for heading in headings[level]:
+                            st.write(f"- {heading}")
+                st.write("---")
+
+            heading_analysis = analyze_headings(all_headings)
+
+            with st.spinner("Generating optimized content structure..."):
+                optimized_structure = generate_optimized_structure(keyword, heading_analysis, competitor_meta_info, openai_api_key)
+                if optimized_structure:
+                    st.subheader("Optimized Content Structure:")
+                    st.markdown(optimized_structure)
+
+                    # Create and offer Word document download
+                    doc = create_word_document(keyword, optimized_structure)
+                    if doc:
+                        bio = BytesIO()
+                        doc.save(bio)
+                        bio.seek(0)
+                        st.download_button(
+                            label="Download Content Brief",
+                            data=bio,
+                            file_name=f"content_brief_{keyword.replace(' ', '_')}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                else:
+                    st.error("Failed to generate optimized structure. Please try again.")
     else:
-        st.error("Please enter your OpenAI API key, SerpApi API key, and a target keyword to generate a content outline.")
+        st.error("Please enter your OpenAI API key, target keyword, and upload competitor HTML files to proceed.")
