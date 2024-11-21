@@ -4,7 +4,6 @@ from collections import Counter
 from openai import OpenAI
 from docx import Document
 from docx.shared import Pt
-from docx.enum.style import WD_STYLE_TYPE
 from io import BytesIO
 
 # Set page config
@@ -183,39 +182,43 @@ def create_word_document(keyword, optimized_structure):
 
     doc = Document()
 
-    # Add styles
+    # Modify built-in styles
     styles = doc.styles
 
-    # H1 Style
-    h1_style = styles.add_style('H1', WD_STYLE_TYPE.PARAGRAPH)
-    h1_style.font.size = Pt(18)
-    h1_style.font.bold = True
+    # Modify 'Heading 1' style
+    h1_style = styles['Heading 1']
+    h1_font = h1_style.font
+    h1_font.size = Pt(18)
+    h1_font.bold = True
     h1_style.paragraph_format.space_before = Pt(0)
     h1_style.paragraph_format.space_after = Pt(0)
 
-    # H2 Style
-    h2_style = styles.add_style('H2', WD_STYLE_TYPE.PARAGRAPH)
-    h2_style.font.size = Pt(16)
-    h2_style.font.bold = True
+    # Modify 'Heading 2' style
+    h2_style = styles['Heading 2']
+    h2_font = h2_style.font
+    h2_font.size = Pt(16)
+    h2_font.bold = True
     h2_style.paragraph_format.space_before = Pt(0)
     h2_style.paragraph_format.space_after = Pt(0)
 
-    # H3 Style
-    h3_style = styles.add_style('H3', WD_STYLE_TYPE.PARAGRAPH)
-    h3_style.font.size = Pt(14)
-    h3_style.font.bold = True
+    # Modify 'Heading 3' style
+    h3_style = styles['Heading 3']
+    h3_font = h3_style.font
+    h3_font.size = Pt(14)
+    h3_font.bold = True
     h3_style.paragraph_format.space_before = Pt(0)
     h3_style.paragraph_format.space_after = Pt(0)
 
-    # H4 Style
-    h4_style = styles.add_style('H4', WD_STYLE_TYPE.PARAGRAPH)
-    h4_style.font.size = Pt(12)
-    h4_style.font.bold = True
+    # Modify 'Heading 4' style
+    h4_style = styles['Heading 4']
+    h4_font = h4_style.font
+    h4_font.size = Pt(12)
+    h4_font.bold = True
     h4_style.paragraph_format.space_before = Pt(0)
     h4_style.paragraph_format.space_after = Pt(0)
 
     # Add title
-    doc.add_paragraph(f'Content Brief: {keyword}', style='H1')
+    doc.add_heading(f'Content Brief: {keyword}', level=1)
 
     # Process the optimized structure
     lines = optimized_structure.strip().split('\n')
@@ -231,13 +234,13 @@ def create_word_document(keyword, optimized_structure):
             doc.add_heading('Content Outline', level=1)
         elif line.startswith('**H2:'):
             heading_text = line.replace('**H2:', '').replace('**', '').strip()
-            doc.add_heading(f"H2: {heading_text}", style='H2')
+            doc.add_heading(f"H2: {heading_text}", level=2)
         elif line.startswith('**H3:'):
             heading_text = line.replace('**H3:', '').replace('**', '').strip()
-            doc.add_heading(f"H3: {heading_text}", style='H3')
+            doc.add_heading(f"H3: {heading_text}", level=3)
         elif line.startswith('**H4:'):
             heading_text = line.replace('**H4:', '').replace('**', '').strip()
-            doc.add_heading(f"H4: {heading_text}", style='H4')
+            doc.add_heading(f"H4: {heading_text}", level=4)
         elif line.startswith('- **Content Guidance:**'):
             content_guidance = line.replace('- **Content Guidance:**', '').strip()
             paragraph = doc.add_paragraph(content_guidance)
