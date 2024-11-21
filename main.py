@@ -63,6 +63,9 @@ def extract_headings_from_html(html_content):
                 element.decompose()
             content_to_search = soup.body
 
+        if not content_to_search:
+            content_to_search = soup  # Fallback to entire soup
+
         headings = {
             "h1": [h.get_text(separator=' ', strip=True) for h in content_to_search.find_all("h1") if h.get_text(strip=True)],
             "h2": [h.get_text(separator=' ', strip=True) for h in content_to_search.find_all("h2") if h.get_text(strip=True)],
@@ -116,7 +119,8 @@ Instructions:
 7. Include sections that address common questions or concerns related to the topic.
 8. Where applicable, include comparisons with alternatives or related concepts.
 9. Consider including a section on practical application or next steps for the reader.
-10. Ensure the outline covers the topic thoroughly while remaining focused and relevant to the main keyword.
+10. If you identify any important topics or subtopics not covered in the competitor headings, include them in your content outline to ensure topical completeness.
+11. Ensure the outline covers the topic thoroughly while remaining focused and relevant to the main keyword.
 
 IMPORTANT: Use markdown syntax for bold text and headings. Present the recommendations in a clear, structured format using markdown.
 
@@ -181,21 +185,34 @@ def create_word_document(keyword, optimized_structure):
 
     # Add styles
     styles = doc.styles
+
+    # H1 Style
     h1_style = styles.add_style('H1', WD_STYLE_TYPE.PARAGRAPH)
     h1_style.font.size = Pt(18)
     h1_style.font.bold = True
+    h1_style.paragraph_format.space_before = Pt(0)
+    h1_style.paragraph_format.space_after = Pt(0)
 
+    # H2 Style
     h2_style = styles.add_style('H2', WD_STYLE_TYPE.PARAGRAPH)
     h2_style.font.size = Pt(16)
     h2_style.font.bold = True
+    h2_style.paragraph_format.space_before = Pt(0)
+    h2_style.paragraph_format.space_after = Pt(0)
 
+    # H3 Style
     h3_style = styles.add_style('H3', WD_STYLE_TYPE.PARAGRAPH)
     h3_style.font.size = Pt(14)
     h3_style.font.bold = True
+    h3_style.paragraph_format.space_before = Pt(0)
+    h3_style.paragraph_format.space_after = Pt(0)
 
+    # H4 Style
     h4_style = styles.add_style('H4', WD_STYLE_TYPE.PARAGRAPH)
     h4_style.font.size = Pt(12)
     h4_style.font.bold = True
+    h4_style.paragraph_format.space_before = Pt(0)
+    h4_style.paragraph_format.space_after = Pt(0)
 
     # Add title
     doc.add_paragraph(f'Content Brief: {keyword}', style='H1')
@@ -214,20 +231,25 @@ def create_word_document(keyword, optimized_structure):
             doc.add_heading('Content Outline', level=1)
         elif line.startswith('**H2:'):
             heading_text = line.replace('**H2:', '').replace('**', '').strip()
-            doc.add_heading(heading_text, level=2)
+            doc.add_heading(f"H2: {heading_text}", style='H2')
         elif line.startswith('**H3:'):
             heading_text = line.replace('**H3:', '').replace('**', '').strip()
-            doc.add_heading(heading_text, level=3)
+            doc.add_heading(f"H3: {heading_text}", style='H3')
         elif line.startswith('**H4:'):
             heading_text = line.replace('**H4:', '').replace('**', '').strip()
-            doc.add_heading(heading_text, level=4)
+            doc.add_heading(f"H4: {heading_text}", style='H4')
         elif line.startswith('- **Content Guidance:**'):
             content_guidance = line.replace('- **Content Guidance:**', '').strip()
-            doc.add_paragraph(content_guidance)
+            paragraph = doc.add_paragraph(content_guidance)
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(0)
         elif line == '---':
             continue
         else:
-            doc.add_paragraph(line)
+            # Handle other lines, such as recommendations
+            paragraph = doc.add_paragraph(line)
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(0)
 
     return doc
 
