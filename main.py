@@ -109,17 +109,23 @@ Aim for roughly {suggested_min}-{suggested_max} total headings (H2/H3/H4 combine
 """
 
     if content_mode == "Full Content":
+        # In full content mode, produce actual paragraphs of content after each heading
         content_instructions = f"""
 For each **H2** heading:
-- **Content Guidance:** Provide several paragraphs (at least 2-3 substantial paragraphs per H2 section) of original, in-depth content. Each H2 section should contribute meaningfully toward the total article length of {word_count_range}. Include examples, explanations, and relevant details. 
-- Use **H3** and **H4** subheadings where appropriate to break down complex topics further. Provide at least a paragraph of content under each H3, and if used, a few sentences under each H4.
-- Incorporate relevant details from competitor snippets if any. 
-- Avoid overly brief content; ensure each major section is thorough enough to support the final word count.
+- Provide several paragraphs (at least 2-3 paragraphs) of fully written content directly under the heading. 
+- If you use **H3** or **H4** headings, also provide at least one full paragraph under each of those subheadings.
+- The goal is to produce a fully fleshed-out article, not just instructions or brief guidance.
+- Make sure the total word count meets the {word_count_range} target.
+
+Do not include the phrase "Content Guidance." Instead, write the full content directly under each heading.
 """
     else:
+        # For outline mode, just provide brief direction
         content_instructions = """
 For each heading:
-- **Content Guidance:** Provide a brief (1-2 sentences) description of what should be covered. No full paragraphs needed in this mode.
+- Provide a brief (1-2 sentences) description of what should be covered. No full paragraphs needed.
+
+Do not include the phrase "Content Guidance." Just write the brief guidance directly under the heading.
 """
 
     snippet_text = ""
@@ -129,7 +135,10 @@ For each heading:
     prompt = f"""
 You are an SEO content strategist.
 
-Your task is to create an optimized content outline and, if "Full Content" mode is chosen, produce fully written, comprehensive content for a new article targeting the keyword "{keyword}".
+Your task:
+- Create an optimized content structure for a new article targeting the keyword "{keyword}".
+- If "Full Content" mode is chosen, produce the fully written article content under each heading.
+- If "Outline" mode is chosen, provide brief guidance (1-2 sentences) under each heading.
 
 **Competitor Meta and Headings**:
 {competitor_meta_info}
@@ -139,48 +148,50 @@ Your task is to create an optimized content outline and, if "Full Content" mode 
 
 Instructions:
 1. Recommend an optimized meta title, meta description, and H1 tag.
-2. Generate an optimized heading structure (H2/H3/H4) covering important subtopics comprehensively.
-3. Ensure a logical progression and include sections addressing common questions, comparisons, practical steps, and subtopics not covered by competitors if relevant.
+2. Generate an optimized heading structure (H2/H3/H4) covering important subtopics.
+3. Ensure logical flow and include subtopics for completeness.
 4. Provide a final summary at the end of the article.
-5. Follow the length and heading count guidelines below.
+5. Follow the word count and heading count guidelines.
 
 {length_instruction}
 
 {content_instructions}
 
-**Formatting Notes:**
+**Formatting:**
 - Use `**H2: Heading Title**` for main sections.
 - Use `**H3: Subheading Title**` and `**H4: Sub-subheading Title**` for additional detail.
-- For "Full Content" mode, write actual paragraphs under each guidance section, not just instructions.
+- For Full Content mode, write full paragraphs of content immediately after each heading (no 'Content Guidance' labels).
+- For Outline mode, write brief guidance (1-2 sentences) immediately after each heading.
 
-Format:
+Format Example:
 
 **Meta Title Recommendation:**
-Your recommendation
+[Your meta title]
 
 ---
 
 **Meta Description Recommendation:**
-Your recommendation
+[Your meta description]
 
 ---
 
 **H1 Tag Recommendation:**
-Your recommendation
+[Your H1]
 
 ---
 
 **Content Outline:**
 
-**H2: [Main Heading]**
-- **Content Guidance:** [For Full Content mode: Full paragraphs here. For Outline mode: 1-2 sentence guidance.]
+**H2: Example Heading**
+[Full paragraphs or brief guidance here, depending on mode]
 
-(Repeat for all headings and use H3/H4 as needed)
+**H3: Example Subheading**
+[Full paragraph(s) or brief guidance here]
 
 ---
 
 **Final Summary**
-Your summary (Full paragraph(s) if in Full Content mode)
+[Full paragraphs or brief summary here, depending on mode]
 ---
 """
 
@@ -188,10 +199,10 @@ Your summary (Full paragraph(s) if in Full Content mode)
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful SEO content strategist. Provide detailed, high-quality content when requested."},
+                {"role": "system", "content": "You are a helpful SEO content strategist. Produce full content if in Full Content mode."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
+            temperature=0.6,
             max_tokens=7000
         )
 
@@ -250,7 +261,7 @@ def create_word_document(keyword, optimized_structure):
         elif line == '---':
             continue
         else:
-            # For all other lines, add as paragraph
+            # Just add paragraphs as they are
             paragraph = doc.add_paragraph(line)
             paragraph.paragraph_format.space_before = Pt(0)
             paragraph.paragraph_format.space_after = Pt(0)
@@ -275,7 +286,7 @@ if st.button("Generate Content Outline"):
         status_text.text("Extracting headings from competitor content...")
         all_headings = []
         competitor_meta_info = ''
-        relevant_snippets = []  # Add any snippets if using embeddings
+        relevant_snippets = []
 
         for idx, file in enumerate(uploaded_competitor_files, 1):
             html_content = file.read().decode('utf-8')
