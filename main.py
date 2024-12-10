@@ -23,7 +23,10 @@ st.markdown("""
 6. Click **'Generate Content Outline'**.
 7. Download the final content as a Word document.
 
-**Note:** Word counts are approximate. The model cannot measure words exactly. We have provided guidelines to encourage the correct length. Please ensure you provide enough detail to meet or slightly exceed the target word count.
+**Note:**  
+- The model cannot measure words exactly. It will try to meet or exceed the target word count.  
+- In "Full Content" mode, produce **final, ready-to-publish paragraphs**. Avoid phrases like "This section will discuss...". Just present the information directly and in a completed form.
+- Write as if the article is fully complete and published, providing all details directly.
 """)
 
 if 'openai_api_key' not in st.session_state:
@@ -159,41 +162,42 @@ def generate_body_insights(keyword, all_paragraphs):
 def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs):
     openai.api_key = api_key
 
+    # Adjust heading counts and paragraph instructions as needed
     if article_length == "Short":
         word_count_range = "around 750 words"
-        suggested_min, suggested_max = 8, 10
         paragraph_guidance = """
-- Aim for ~5-8 total headings.
-- For Full Content: Each H2 should have ~2 paragraphs (~100 words each), and if using H3/H4, at least one ~75-word paragraph each.
-- If unsure, add more detail to ensure ~750 words total.
+- Aim for 8-10 total headings.
+- For Full Content: ~2 paragraphs (~100 words each) per H2. H3/H4 get ~75 words each.
+- Do not write about what you 'will' discuss, just present the information directly.
 """
     elif article_length == "Medium":
         word_count_range = "approximately 1250-1500 words"
-        suggested_min, suggested_max = 15, 18
         paragraph_guidance = """
-- Aim for ~12-15 total headings.
-- For Full Content: Each H2 should have ~3 paragraphs (~100 words each), and each H3/H4 at least one ~100-word paragraph.
-- Err on the side of more content if unsure, to reach 1250-1500 words.
+- Aim for 15-18 total headings.
+- For Full Content: Each H2 ~2-3 paragraphs (~100 words each). H3/H4 ~100 words each.
+- Include sufficient headings and subheadings to reach ~1250-1500 words.
+- Do not say 'this section will discuss'; present the content as final text.
 """
     else:  # Long
         word_count_range = "approximately 1500-3000 words"
-        suggested_min, suggested_max = 20, 25
         paragraph_guidance = """
-- Aim for ~15-20 total headings.
-- For Full Content: Each H2 should have ~3-4 paragraphs (~100 words each), and each H3/H4 at least one ~100-word paragraph.
-- If unsure, add more detail to ensure at least 1500 words, preferably closer to 2000 words or more if needed.
+- Aim for 20-25 total headings.
+- For Full Content: Each H2 ~3 paragraphs (~100 words each). Use multiple H3/H4 subheadings (each ~100 words).
+- If unsure, add more detail to exceed 1500 words.
+- Avoid future-tense placeholders. Present all content as if final.
 """
 
     semantic_insights = generate_semantic_insights(keyword, all_headings)
     body_insights = generate_body_insights(keyword, all_paragraphs)
 
+    # Add explicit instructions to avoid placeholder language
     prompt = f"""
 You are an SEO content strategist.
 
 Your task:
-- Create an optimized content structure for a new article targeting the keyword "{keyword}".
-- If "Full Content" mode: produce fully written, detailed paragraphs under each heading.
-- If "Outline" mode: just provide 1-2 sentences per heading as guidance.
+- Create an optimized content structure for an article targeting "{keyword}".
+- "Full Content" mode: fully written paragraphs (no placeholders like "this section will..."). Present final, ready-to-publish text.
+- "Outline" mode: 1-2 sentence guidance per heading.
 
 **Competitor Meta and Headings**:
 {competitor_meta_info}
@@ -205,65 +209,43 @@ Your task:
 {body_insights}
 
 Instructions:
-1. Provide a meta title, meta description, and H1 tag.
-2. Produce an optimized heading structure (H2/H3/H4) covering all relevant subtopics.
-3. Ensure logical flow, comprehensiveness, and topical completeness.
+1. Provide meta title, meta description, and H1.
+2. Produce heading structure (H2/H3/H4) covering all subtopics.
+3. Ensure logical flow, comprehensive coverage.
 4. Include a final summary.
-5. Follow length guidelines strictly: {word_count_range} total.
+5. Word count target: {word_count_range}
 {paragraph_guidance}
 
-For Full Content mode:
-- No "Content Guidance" labels.
-- Write full paragraphs directly under each heading.
-- Use the paragraph and word count hints above to achieve the desired total length.
-- If unsure, add more detail/paragraphs to meet or exceed the word count target.
-
-For Outline mode:
-- Just 1-2 sentences per heading, no full paragraphs needed.
+Additional Important Instructions:
+- In Full Content mode, write as if the article is final and already published.
+- Do NOT say "this section will discuss". Instead, directly provide the information.
+- Expand on details thoroughly. If needed, err on writing more content.
+- Provide actual facts, descriptions, and explanations directly under each heading.
 
 **Formatting:**
-- `**H2: Heading Title**` for main sections.
-- `**H3: Subheading Title**` and `**H4: Sub-subheading Title**` for additional detail.
-- In Full Content mode, produce the full content under each heading.
-- In Outline mode, brief guidance (1-2 sentences) under each heading.
+- `**H2: Heading Title**`
+- `**H3: Subheading Title**`, `**H4: Sub-subheading Title**`
+- Full Content mode: full paragraphs, final text.
+- Outline mode: brief guidance.
 
-Example Format:
-
-**Meta Title Recommendation:**
-[Your meta title]
-
----
-
-**Meta Description Recommendation:**
-[Your meta description]
-
----
-
-**H1 Tag Recommendation:**
-[Your H1]
-
----
-
-**Content Outline:**
-
+Example (Full Content mode):
 **H2: Example Heading**
-[Full paragraphs or brief guidance]
-
-**H3: Example Subheading**
-[Full paragraph(s) or brief guidance]
+Write full paragraphs here, describing the topic as if final.
 
 ---
 
 **Final Summary**
-[Full paragraphs or brief summary]
----
+Final concluding paragraphs, fully written.
+
+No placeholders or references to “this section” or “we will discuss”.
+
 """
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a helpful SEO content strategist. Produce more text rather than less if unsure about word counts."},
+                {"role": "system", "content": "You are a helpful SEO content strategist. Produce fully written, ready-to-publish content in Full Content mode. Avoid placeholders."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
