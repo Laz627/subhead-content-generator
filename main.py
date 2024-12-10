@@ -243,13 +243,13 @@ No placeholders or references to “this section” or “we will discuss”.
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful SEO content strategist. Produce fully written, ready-to-publish content in Full Content mode. Avoid placeholders."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_tokens=7000
+            temperature=0.6,
+            max_tokens=20000
         )
 
         output = response.choices[0].message.content
