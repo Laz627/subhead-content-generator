@@ -30,9 +30,11 @@ if 'openai_api_key' not in st.session_state:
 if 'keyword' not in st.session_state:
     st.session_state.keyword = ''
 
-def extract_headings_from_html(html_content):
+
+def extract_headings_and_body(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
 
+    # Remove non-content elements
     tags_to_remove = ['script', 'style', 'noscript', 'header', 'footer', 'nav', 'aside']
     for tag in tags_to_remove:
         for element in soup.find_all(tag):
@@ -64,10 +66,16 @@ def extract_headings_from_html(html_content):
         "h4": [h.get_text(separator=' ', strip=True) for h in content_to_search.find_all("h4") if h.get_text(strip=True)]
     }
 
+    # Extract body paragraphs
+    # We'll consider all <p> tags as body content, excluding empty ones.
+    paragraphs = [p.get_text(separator=' ', strip=True) for p in content_to_search.find_all('p') if p.get_text(strip=True)]
+
+    # Extract meta info
     meta_title = soup.title.string.strip() if soup.title else ''
     meta_description_tag = soup.find('meta', attrs={'name': 'description'})
     meta_description = meta_description_tag['content'].strip() if meta_description_tag else ''
-    return meta_title, meta_description, headings
+
+    return meta_title, meta_description, headings, paragraphs
 
 def analyze_headings(all_headings):
     analysis = {}
@@ -84,7 +92,79 @@ def analyze_headings(all_headings):
     analysis["total_headings_count"] = total_headings_count
     return analysis
 
-def generate_optimized_structure(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, relevant_snippets):
+def get_embedding(text, model="text-embedding-ada-002"):
+    # Generate an embedding for the given text
+    response = openai.Embedding.create(
+        input=[text],
+        model=model
+    )
+    return np.array(response['data'][0]['embedding'], dtype=np.float32)
+
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a)*np.linalg.norm(b))
+
+def generate_semantic_insights(keyword, all_headings):
+    # Flatten all competitor h2/h3/h4 headings
+    competitor_headings = []
+    for h_set in all_headings:
+        competitor_headings.extend(h_set["h2"])
+        competitor_headings.extend(h_set["h3"])
+        competitor_headings.extend(h_set["h4"])
+
+    if not competitor_headings:
+        return "No additional semantic insights available."
+
+    keyword_emb = get_embedding(keyword)
+
+    heading_embeddings = []
+    for ch in competitor_headings:
+        emb = get_embedding(ch)
+        heading_embeddings.append((ch, emb))
+
+    scored = []
+    for ch, emb in heading_embeddings:
+        score = cosine_similarity(keyword_emb, emb)
+        scored.append((ch, score))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+
+    top_headings = [x[0] for x in scored[:5]]
+    summary = "Based on semantic analysis of competitor headings related to your keyword, here are topically relevant areas:\n"
+    for th in top_headings:
+        summary += f"- {th}\n"
+
+    summary += "\nThese suggest key areas of interest for your article."
+    return summary.strip()
+
+def generate_body_insights(keyword, all_paragraphs):
+    # Flatten all paragraphs from all competitors
+    competitor_paragraphs = [p for plist in all_paragraphs for p in plist if len(p.split()) > 5]
+
+    if not competitor_paragraphs:
+        return "No additional body insights available."
+
+    keyword_emb = get_embedding(keyword)
+    paragraph_embeddings = []
+    for para in competitor_paragraphs:
+        emb = get_embedding(para)
+        paragraph_embeddings.append((para, emb))
+
+    scored = []
+    for para, emb in paragraph_embeddings:
+        score = cosine_similarity(keyword_emb, emb)
+        scored.append((para, score))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+
+    # Select top 5 relevant paragraphs
+    top_paras = [x[0] for x in scored[:5]]
+
+    insights = "Competitor Body Insights (top relevant paragraphs to inform content):\n"
+    for i, tp in enumerate(top_paras, 1):
+        insights += f"\nParagraph {i}:\n{tp}\n"
+    return insights.strip()
+
+def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs):
     openai.api_key = api_key
 
     if article_length == "Short":
@@ -109,59 +189,59 @@ Aim for roughly {suggested_min}-{suggested_max} total headings (H2/H3/H4 combine
 """
 
     if content_mode == "Full Content":
-        # In full content mode, produce actual paragraphs of content after each heading
         content_instructions = f"""
 For each **H2** heading:
-- Provide several paragraphs (at least 2-3 paragraphs) of fully written content directly under the heading. 
-- If you use **H3** or **H4** headings, also provide at least one full paragraph under each of those subheadings.
-- The goal is to produce a fully fleshed-out article, not just instructions or brief guidance.
-- Make sure the total word count meets the {word_count_range} target.
+- Provide several paragraphs (at least 2-3 paragraphs) of fully written content directly under the heading.
+- If you use **H3** or **H4** headings, also provide at least one full paragraph under each subheading.
+- The goal is a fully fleshed-out article, not just brief guidance.
+- Meet the {word_count_range} target.
 
-Do not include the phrase "Content Guidance." Instead, write the full content directly under each heading.
+Do not include "Content Guidance." Instead, write full content directly under each heading.
 """
     else:
-        # For outline mode, just provide brief direction
         content_instructions = """
 For each heading:
 - Provide a brief (1-2 sentences) description of what should be covered. No full paragraphs needed.
 
-Do not include the phrase "Content Guidance." Just write the brief guidance directly under the heading.
+Do not include "Content Guidance." Just write brief guidance directly under the heading.
 """
 
-    snippet_text = ""
-    for i, snippet in enumerate(relevant_snippets, 1):
-        snippet_text += f"Competitor Snippet #{i}:\n{snippet}\n\n"
+    semantic_insights = generate_semantic_insights(keyword, all_headings)
+    body_insights = generate_body_insights(keyword, all_paragraphs)
 
     prompt = f"""
 You are an SEO content strategist.
 
 Your task:
 - Create an optimized content structure for a new article targeting the keyword "{keyword}".
-- If "Full Content" mode is chosen, produce the fully written article content under each heading.
+- If "Full Content" mode is chosen, produce fully written article content under each heading.
 - If "Outline" mode is chosen, provide brief guidance (1-2 sentences) under each heading.
 
 **Competitor Meta and Headings**:
 {competitor_meta_info}
 
-**Relevant Competitor Snippets**:
-{snippet_text}
+**Competitor Semantic Insights (from headings)**:
+{semantic_insights}
+
+**Competitor Body Insights (from paragraphs)**:
+{body_insights}
 
 Instructions:
 1. Recommend an optimized meta title, meta description, and H1 tag.
 2. Generate an optimized heading structure (H2/H3/H4) covering important subtopics.
-3. Ensure logical flow and include subtopics for completeness.
-4. Provide a final summary at the end of the article.
-5. Follow the word count and heading count guidelines.
+3. Ensure logical flow and comprehensive coverage.
+4. Provide a final summary at the end.
+5. Follow word count and heading count guidelines.
 
 {length_instruction}
 
 {content_instructions}
 
 **Formatting:**
-- Use `**H2: Heading Title**` for main sections.
-- Use `**H3: Subheading Title**` and `**H4: Sub-subheading Title**` for additional detail.
-- For Full Content mode, write full paragraphs of content immediately after each heading (no 'Content Guidance' labels).
-- For Outline mode, write brief guidance (1-2 sentences) immediately after each heading.
+- `**H2: Heading Title**` for main sections.
+- `**H3: Subheading Title**` and `**H4: Sub-subheading Title**` for detail.
+- Full Content mode: full paragraphs under each heading.
+- Outline mode: brief guidance under each heading.
 
 Format Example:
 
@@ -183,15 +263,15 @@ Format Example:
 **Content Outline:**
 
 **H2: Example Heading**
-[Full paragraphs or brief guidance here, depending on mode]
+[Content or brief guidance]
 
 **H3: Example Subheading**
-[Full paragraph(s) or brief guidance here]
+[Content or brief guidance]
 
 ---
 
 **Final Summary**
-[Full paragraphs or brief summary here, depending on mode]
+[Content or brief summary]
 ---
 """
 
@@ -261,7 +341,6 @@ def create_word_document(keyword, optimized_structure):
         elif line == '---':
             continue
         else:
-            # Just add paragraphs as they are
             paragraph = doc.add_paragraph(line)
             paragraph.paragraph_format.space_before = Pt(0)
             paragraph.paragraph_format.space_after = Pt(0)
@@ -280,18 +359,20 @@ st.session_state.keyword = keyword
 
 if st.button("Generate Content Outline"):
     if openai_api_key and keyword and uploaded_competitor_files:
+        openai.api_key = openai_api_key
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        status_text.text("Extracting headings from competitor content...")
+        status_text.text("Extracting headings and body content from competitor pages...")
         all_headings = []
+        all_paragraphs = []
         competitor_meta_info = ''
-        relevant_snippets = []
 
         for idx, file in enumerate(uploaded_competitor_files, 1):
             html_content = file.read().decode('utf-8')
-            meta_title, meta_description, headings = extract_headings_from_html(html_content)
+            meta_title, meta_description, headings, paragraphs = extract_headings_and_body(html_content)
             all_headings.append(headings)
+            all_paragraphs.append(paragraphs)
 
             competitor_meta_info += f"Competitor #{idx} Meta Title: {meta_title}\n"
             competitor_meta_info += f"Competitor #{idx} Meta Description: {meta_description}\n"
@@ -307,9 +388,11 @@ if st.button("Generate Content Outline"):
         heading_analysis = analyze_headings(all_headings)
 
         progress_bar.progress(50)
-        status_text.text("Generating optimized content structure...")
+        status_text.text("Generating optimized content structure with insights...")
 
-        optimized_structure = generate_optimized_structure(keyword, heading_analysis, competitor_meta_info, openai_api_key, content_mode, article_length, relevant_snippets)
+        optimized_structure = generate_optimized_structure_with_insights(
+            keyword, heading_analysis, competitor_meta_info, openai_api_key, content_mode, article_length, all_headings, all_paragraphs
+        )
 
         if optimized_structure:
             st.subheader("Optimized Content Structure:")
