@@ -249,7 +249,7 @@ No placeholders or references to “this section” or “we will discuss”.
                 {"role": "user", "content": prompt}
             ],
             temperature=0.6,
-            max_tokens=20000
+            max_tokens=16384
         )
 
         output = response.choices[0].message.content
