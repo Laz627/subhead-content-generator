@@ -22,15 +22,6 @@ st.markdown("""
    - Long: ~1500-3000 words
 6. Click **'Generate Content Outline'**.
 7. Download the final content as a Word document.
-
-### Important Guidelines:
-- **"Full Content" Mode:** Provide fully written, final paragraphs. No placeholders like "this section will...".
-- **"Just Outline & Guidance" Mode:** Only provide 1-2 sentences under each heading as guidance. **Do not produce full paragraphs**.
-- Use more H3/H4 headings for longer content to avoid overly long sections.
-- Meta tags and H1 should be formatted as:
-  - `**Meta Title:** Your Title`
-  - `**Meta Description:** Your Description`
-  - `**H1:** Your H1`
 """)
 
 if 'openai_api_key' not in st.session_state:
