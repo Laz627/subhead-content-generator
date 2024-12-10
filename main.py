@@ -24,13 +24,13 @@ st.markdown("""
 7. Download the final content as a Word document.
 
 ### Important Guidelines:
-- **Full Content Mode:** Provide fully written, ready-to-publish content. Avoid placeholder phrases like "this section will...". Present final, polished text directly under each heading.
-- **Use of Headings:** For longer content, use more H3 (and possibly H4) headings to break down sections instead of making a single overly verbose section.
-- **Meta Title, Description, and H1 Format:**  
-  Use `**Meta Title:** <Your Title>`  
-  Use `**Meta Description:** <Your Description>`  
-  Use `**H1:** <Your H1>`  
-- **If Full Content:** Expand on details thoroughly and err on producing more text if unsure.
+- **"Full Content" Mode:** Provide fully written, final paragraphs. No placeholders like "this section will...".
+- **"Just Outline & Guidance" Mode:** Only provide 1-2 sentences under each heading as guidance. **Do not produce full paragraphs**.
+- Use more H3/H4 headings for longer content to avoid overly long sections.
+- Meta tags and H1 should be formatted as:
+  - `**Meta Title:** Your Title`
+  - `**Meta Description:** Your Description`
+  - `**H1:** Your H1`
 """)
 
 if 'openai_api_key' not in st.session_state:
@@ -168,34 +168,41 @@ def generate_optimized_structure_with_insights(keyword, heading_analysis, compet
     if article_length == "Short":
         word_count_range = "around 750 words"
         paragraph_guidance = """
-- Aim for ~8-10 total headings.
-- Full Content: ~2 paragraphs (~100 words each) per H2; H3/H4 add ~75 words each.
+- If Full Content: ~2 paragraphs (~100 words each) per H2; H3/H4 ~75 words each.
+- If Outline mode: Just 1-2 sentences per heading.
 """
     elif article_length == "Medium":
         word_count_range = "approximately 1250-1500 words"
         paragraph_guidance = """
-- Aim for ~15-18 total headings.
-- Full Content: Each H2 ~2-3 paragraphs (~100 words each); H3/H4 ~100 words each.
-- Use H3s (and a few H4s if needed) to break up content.
+- If Full Content: Each H2 ~2-3 paragraphs (~100 words each); H3/H4 ~100 words each.
+- If Outline mode: Just 1-2 sentences per heading.
+Use H3s/H4s to break content.
 """
     else:  # Long
         word_count_range = "approximately 1500-3000 words"
         paragraph_guidance = """
-- Aim for ~20-25 total headings (H2/H3/H4) to break down content.
-- Full Content: Each H2 ~3 paragraphs (~100 words each). Use multiple H3/H4 (each ~100 words) instead of overly long paragraphs.
-- Err on the side of more detail.
+- If Full Content: Each H2 ~3 paragraphs (~100 words each); multiple H3/H4 (~100 words each).
+- If Outline mode: Just 1-2 sentences per heading.
+Aim for ~20-25 headings total. More headings vs. overly long sections.
 """
 
     semantic_insights = generate_semantic_insights(keyword, all_headings)
     body_insights = generate_body_insights(keyword, all_paragraphs)
 
+    # Distinguish instructions based on content_mode
+    if content_mode == "Full Content":
+        mode_instructions = """You are in FULL CONTENT mode. Write fully formed, publish-ready paragraphs. No placeholder phrases. Expand details to meet the word count."""
+    else:
+        mode_instructions = """You are in OUTLINE mode. DO NOT produce full paragraphs. Only provide 1-2 sentences of guidance under each heading, no more."""
+
     prompt = f"""
 You are an SEO content strategist.
 
 Your task:
-- Create a comprehensive article on "{keyword}".
-- If Full Content mode: Provide fully written, polished paragraphs with no placeholder language. Present final text.
-- For longer content, use more H3 (and possibly H4) headings to break up sections rather than a few long paragraphs.
+- Target keyword: "{keyword}"
+- Mode: {content_mode} (Full Content or Outline)
+- If Full Content mode: fully written paragraphs, no placeholders.
+- If Outline mode: only brief (1-2 sentence) guidance per heading, no full paragraphs.
 
 **Competitor Meta and Headings**:
 {competitor_meta_info}
@@ -207,42 +214,48 @@ Your task:
 {body_insights}
 
 Instructions:
-1. Provide meta title, meta description, and H1 using this format:
-   **Meta Title:** Your Title  
-   **Meta Description:** Your Description  
-   **H1:** Your H1
-2. Produce a heading structure (H2/H3/H4) covering all subtopics.
-3. No placeholders. No "this section will..." language. Just present final info.
-4. Ensure logical flow, comprehensive coverage.
-5. Word count: {word_count_range}
+1. Provide meta title, meta description, and H1 in this format:
+   **Meta Title:** ...
+   **Meta Description:** ...
+   **H1:** ...
+2. Produce H2/H3/H4 structure covering all subtopics.
+3. {mode_instructions}
+4. Word count target: {word_count_range}
 {paragraph_guidance}
+5. For Full Content: final publishable text under each heading.
+   For Outline mode: just brief guidance (1-2 sentences), no full paragraphs.
 
-**Formatting Example (Full Content Mode)**:
-**Meta Title:** The Ultimate Guide to Standard Window Sizes: Dimensions, Types, and Benefits  
-**Meta Description:** Discover everything you need...  
-**H1:** A Comprehensive Guide to Standard Window Sizes
+**Example (Outline mode)**:
+**Meta Title:** My Title
+**Meta Description:** My Description
+**H1:** My H1
 
-**H2: What Are Standard Window Sizes?**
-(Final, ready-to-publish paragraphs here...)
+**H2: Topic Heading**
+(1-2 sentences guidance here, no full paragraphs.)
 
-**H3: Example Subtopic**
-(Fully written paragraph here...)
+**Example (Full Content mode)**:
+**Meta Title:** My Title
+**Meta Description:** My Description
+**H1:** My H1
+
+**H2: Topic Heading**
+(Fully written paragraphs...)
 
 **Final Summary**
-(Concluding paragraphs in final form.)
+(Concluding paragraphs in Full Content, or brief sentences if Outline mode.)
 
-Remember: Avoid placeholder phrases, produce final publishable text.
+Remember: If Outline mode, no full paragraphs. If Full Content mode, fully fleshed-out paragraphs.
 """
 
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful SEO content strategist. Produce final publishable content if in Full Content mode, using headings as instructed."},
+                {"role": "system", "content": "You are a helpful SEO content strategist."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=7000
+            max_tokens=16000
         )
 
         output = response.choices[0].message.content
