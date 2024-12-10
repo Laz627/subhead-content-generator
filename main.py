@@ -87,7 +87,6 @@ def analyze_headings(all_headings):
 def generate_optimized_structure(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, relevant_snippets):
     openai.api_key = api_key
 
-    # Set target word counts and heading ranges
     if article_length == "Short":
         word_count_range = "around 750 words"
         base_min, base_max = 5, 8
@@ -99,7 +98,6 @@ def generate_optimized_structure(keyword, heading_analysis, competitor_meta_info
         base_min, base_max = 15, 20
 
     total_competitor_headings = heading_analysis.get("total_headings_count", 0)
-    # Adjust subheads based on competitor headings (optional, can just rely on set ranges)
     extra = min((total_competitor_headings - 20) // 10, base_max - base_min) if total_competitor_headings > 20 else 0
     suggested_min = base_min + extra
     suggested_max = base_max + extra
@@ -107,23 +105,21 @@ def generate_optimized_structure(keyword, heading_analysis, competitor_meta_info
 
     length_instruction = f"""
 Your article should be {word_count_range}. 
-Try to produce a cohesive structure that thoroughly covers the topic. 
 Aim for roughly {suggested_min}-{suggested_max} total headings (H2/H3/H4 combined) to ensure topical completeness.
 """
 
     if content_mode == "Full Content":
         content_instructions = f"""
-For each heading in the content outline:
-- **Content Guidance:** Provide detailed, original paragraphs of content with sufficient depth to meet the target word count ({word_count_range}). 
-- Incorporate relevant details from the competitor snippets if any.
-- Ensure each section is substantial enough so the total article length meets the specified word count. 
-- Use **H3: Subheading** and **H4: Sub-subheading** where needed to add detail and depth.
+For each **H2** heading:
+- **Content Guidance:** Provide several paragraphs (at least 2-3 substantial paragraphs per H2 section) of original, in-depth content. Each H2 section should contribute meaningfully toward the total article length of {word_count_range}. Include examples, explanations, and relevant details. 
+- Use **H3** and **H4** subheadings where appropriate to break down complex topics further. Provide at least a paragraph of content under each H3, and if used, a few sentences under each H4.
+- Incorporate relevant details from competitor snippets if any. 
+- Avoid overly brief content; ensure each major section is thorough enough to support the final word count.
 """
     else:
         content_instructions = """
-For each heading in the content outline:
-- **Content Guidance:** Provide a brief (1-2 sentences) description of what should be covered under this heading. 
-No full paragraphs needed since this is just an outline.
+For each heading:
+- **Content Guidance:** Provide a brief (1-2 sentences) description of what should be covered. No full paragraphs needed in this mode.
 """
 
     snippet_text = ""
@@ -133,21 +129,20 @@ No full paragraphs needed since this is just an outline.
     prompt = f"""
 You are an SEO content strategist.
 
-Your task is to create an optimized content outline and, if requested, full-length content for a new article targeting the keyword "{keyword}".
+Your task is to create an optimized content outline and, if "Full Content" mode is chosen, produce fully written, comprehensive content for a new article targeting the keyword "{keyword}".
 
-- **Competitor Meta and Headings**:
+**Competitor Meta and Headings**:
 {competitor_meta_info}
 
-- **Relevant Competitor Snippets**:
+**Relevant Competitor Snippets**:
 {snippet_text}
 
 Instructions:
 1. Recommend an optimized meta title, meta description, and H1 tag.
-2. Generate an optimized heading structure (H2/H3/H4) to cover important subtopics comprehensively.
-3. Ensure a logical flow from basic to advanced concepts.
-4. Include sections for common questions, comparisons, practical steps, and any important subtopics not covered by competitors.
-5. Provide a final summary.
-6. Follow the length and heading count guidelines below.
+2. Generate an optimized heading structure (H2/H3/H4) covering important subtopics comprehensively.
+3. Ensure a logical progression and include sections addressing common questions, comparisons, practical steps, and subtopics not covered by competitors if relevant.
+4. Provide a final summary at the end of the article.
+5. Follow the length and heading count guidelines below.
 
 {length_instruction}
 
@@ -155,8 +150,8 @@ Instructions:
 
 **Formatting Notes:**
 - Use `**H2: Heading Title**` for main sections.
-- Use `**H3: Subheading Title**` and `**H4: Sub-subheading Title**` where additional detail is needed.
-- Ensure the final output includes a final summary section labeled as `**Final Summary**`.
+- Use `**H3: Subheading Title**` and `**H4: Sub-subheading Title**` for additional detail.
+- For "Full Content" mode, write actual paragraphs under each guidance section, not just instructions.
 
 Format:
 
@@ -178,26 +173,26 @@ Your recommendation
 **Content Outline:**
 
 **H2: [Main Heading]**
-- **Content Guidance:** [Content or guidance here]
+- **Content Guidance:** [For Full Content mode: Full paragraphs here. For Outline mode: 1-2 sentence guidance.]
 
 (Repeat for all headings and use H3/H4 as needed)
 
 ---
 
 **Final Summary**
-Your summary
+Your summary (Full paragraph(s) if in Full Content mode)
 ---
 """
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Provide detailed SEO content recommendations based on the analysis and snippets."},
+                {"role": "system", "content": "You are a helpful SEO content strategist. Provide detailed, high-quality content when requested."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,  # slightly higher temperature to encourage more varied output
-            max_tokens=4000  # allow more tokens for longer content
+            temperature=0.7,
+            max_tokens=7000
         )
 
         output = response.choices[0].message.content
@@ -214,7 +209,6 @@ def create_word_document(keyword, optimized_structure):
     doc = Document()
     styles = doc.styles
 
-    # Adjusting heading styles as needed
     h4_style = styles['Heading 4']
     h4_font = h4_style.font
     h4_font.size = Pt(12)
@@ -253,13 +247,13 @@ def create_word_document(keyword, optimized_structure):
         elif line.startswith('**H4:'):
             heading_text = line.replace('**H4:', '').replace('**', '').strip()
             doc.add_heading(f"H4: {heading_text}", level=4)
-        elif line.startswith('- **Content Guidance:**'):
-            content_guidance = line.replace('- **Content Guidance:**', '').strip()
-            doc.add_paragraph(content_guidance)
         elif line == '---':
             continue
         else:
-            doc.add_paragraph(line)
+            # For all other lines, add as paragraph
+            paragraph = doc.add_paragraph(line)
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(0)
 
     return doc
 
@@ -281,7 +275,7 @@ if st.button("Generate Content Outline"):
         status_text.text("Extracting headings from competitor content...")
         all_headings = []
         competitor_meta_info = ''
-        relevant_snippets = []  # If you want embeddings/similarity, implement and populate here.
+        relevant_snippets = []  # Add any snippets if using embeddings
 
         for idx, file in enumerate(uploaded_competitor_files, 1):
             html_content = file.read().decode('utf-8')
