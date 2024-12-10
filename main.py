@@ -161,7 +161,7 @@ def generate_optimized_structure_with_insights(keyword, heading_analysis, compet
 
     if article_length == "Short":
         word_count_range = "around 750 words"
-        suggested_min, suggested_max = 5, 8
+        suggested_min, suggested_max = 8, 10
         paragraph_guidance = """
 - Aim for ~5-8 total headings.
 - For Full Content: Each H2 should have ~2 paragraphs (~100 words each), and if using H3/H4, at least one ~75-word paragraph each.
@@ -169,7 +169,7 @@ def generate_optimized_structure_with_insights(keyword, heading_analysis, compet
 """
     elif article_length == "Medium":
         word_count_range = "approximately 1250-1500 words"
-        suggested_min, suggested_max = 12, 15
+        suggested_min, suggested_max = 15, 18
         paragraph_guidance = """
 - Aim for ~12-15 total headings.
 - For Full Content: Each H2 should have ~3 paragraphs (~100 words each), and each H3/H4 at least one ~100-word paragraph.
@@ -177,7 +177,7 @@ def generate_optimized_structure_with_insights(keyword, heading_analysis, compet
 """
     else:  # Long
         word_count_range = "approximately 1500-3000 words"
-        suggested_min, suggested_max = 15, 20
+        suggested_min, suggested_max = 20, 25
         paragraph_guidance = """
 - Aim for ~15-20 total headings.
 - For Full Content: Each H2 should have ~3-4 paragraphs (~100 words each), and each H3/H4 at least one ~100-word paragraph.
@@ -261,7 +261,7 @@ Example Format:
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful SEO content strategist. Produce more text rather than less if unsure about word counts."},
                 {"role": "user", "content": prompt}
