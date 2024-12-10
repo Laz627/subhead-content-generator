@@ -7,15 +7,13 @@ from io import BytesIO
 import numpy as np
 import openai
 
-# Set your API key for OpenAI
-# openai.api_key = "YOUR_OPENAI_API_KEY" # (You will set it via text input in the UI)
-
+# Set page config
 st.set_page_config(page_title="SEO Content Outline Generator", layout="wide")
 st.title("SEO Content Outline Generator")
 
 st.markdown("""
 ## Instructions:
-1. **Enter your OpenAI API key** (with `text-embedding-ada-002` access if needed).
+1. **Enter your OpenAI API key**.
 2. **Input your target keyword.**
 3. **Upload competitor HTML files**.
 4. Choose if you want just an outline or full content.
@@ -85,31 +83,21 @@ def analyze_headings(all_headings):
     return analysis
 
 def generate_optimized_structure(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, relevant_snippets):
-    client = OpenAI(api_key=api_key)
+    # Set the OpenAI API key
+    openai.api_key = api_key
 
     # Determine suggested subhead count based on article length and competitor complexity
     total_competitor_headings = heading_analysis.get("total_headings_count", 0)
-    # Heuristic: Encourage more subheads if competitors have more headings
-    # Also factor in the chosen article length
     if article_length == "Short":
-        # Short: fewer subheads
-        # Base range: 5-8 subheads
         base_min, base_max = 5, 8
     elif article_length == "Medium":
-        # Medium: moderate number
-        # Base range: 8-12 subheads
         base_min, base_max = 8, 12
     else:
-        # Long: more comprehensive
-        # Base range: 12-20 subheads
         base_min, base_max = 12, 20
 
-    # If competitors have many headings, scale up a bit within the chosen range
-    # For every 10 competitor headings above 20, add a subhead up to max
     extra = min((total_competitor_headings - 20) // 10, base_max - base_min) if total_competitor_headings > 20 else 0
     suggested_min = base_min + extra
     suggested_max = base_max + extra
-    # Clamp within reason
     suggested_min = min(suggested_min, suggested_max)
     
     length_instruction = f"""
@@ -187,13 +175,13 @@ Your summary
 """
 
     try:
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "Provide detailed SEO content recommendations based on the analysis and snippets."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.5
+            temperature=0.6
         )
 
         output = response.choices[0].message.content
@@ -276,8 +264,7 @@ if st.button("Generate Content Outline"):
         status_text.text("Extracting headings from competitor content...")
         all_headings = []
         competitor_meta_info = ''
-        embeddings_db = []
-        relevant_snippets = []  # Using cosine similarity on embeddings is optional. Omit if not needed.
+        relevant_snippets = []  # If you want to use embeddings and similarity search, do so before this step.
 
         for idx, file in enumerate(uploaded_competitor_files, 1):
             html_content = file.read().decode('utf-8')
