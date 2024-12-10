@@ -10,6 +10,7 @@ import openai
 st.set_page_config(page_title="SEO Content Outline Generator", layout="wide")
 st.title("SEO Content Outline Generator")
 
+# User-facing instructions only
 st.markdown("""
 ## Instructions:
 1. **Enter your OpenAI API key.**
@@ -47,7 +48,7 @@ def extract_headings_and_body(html_content):
         for element in soup.find_all(attrs={'id': class_or_id}):
             element.decompose()
 
-    main_content = (soup.find('main') or soup.find('article') or 
+    main_content = (soup.find('main') or soup.find('article') or
                     soup.find('div', class_='content') or soup.find('div', id='content'))
     if main_content:
         content_to_search = main_content
@@ -174,7 +175,7 @@ Use H3s/H4s to break content.
         paragraph_guidance = """
 - If Full Content: Each H2 ~3 paragraphs (~100 words each); multiple H3/H4 (~100 words each).
 - If Outline mode: Just 1-2 sentences per heading.
-Aim for ~20-25 headings total. More headings vs. overly long sections.
+Aim for ~20-25 headings total.
 """
 
     semantic_insights = generate_semantic_insights(keyword, all_headings)
@@ -182,9 +183,9 @@ Aim for ~20-25 headings total. More headings vs. overly long sections.
 
     # Distinguish instructions based on content_mode
     if content_mode == "Full Content":
-        mode_instructions = """You are in FULL CONTENT mode. Write fully formed, publish-ready paragraphs. No placeholder phrases. Expand details to meet the word count."""
+        mode_instructions = """You are in FULL CONTENT mode. Write fully formed, publish-ready paragraphs. Avoid filler language like "ultimate", "comprehensive", or "understanding". Use a formal, factual, and direct tone. Expand details to meet the word count, but keep language neutral and professional."""
     else:
-        mode_instructions = """You are in OUTLINE mode. DO NOT produce full paragraphs. Only provide 1-2 sentences of guidance under each heading, no more."""
+        mode_instructions = """You are in OUTLINE mode. DO NOT produce full paragraphs. Only provide 1-2 sentences of guidance per heading. Avoid filler language and overly promotional terms. Keep tone direct and informative."""
 
     prompt = f"""
 You are an SEO content strategist.
@@ -192,8 +193,9 @@ You are an SEO content strategist.
 Your task:
 - Target keyword: "{keyword}"
 - Mode: {content_mode} (Full Content or Outline)
-- If Full Content mode: fully written paragraphs, no placeholders.
-- If Outline mode: only brief (1-2 sentence) guidance per heading, no full paragraphs.
+- If Full Content mode: fully written, final paragraphs. If Outline mode: just 1-2 sentence guidance.
+- Use formal, factual, and direct tone. Avoid hyperbole, promotional terms like "ultimate", "comprehensive", or generic filler language. Be clear and precise.
+- For longer articles, use more H3/H4 headings instead of overly long paragraphs.
 
 **Competitor Meta and Headings**:
 {competitor_meta_info}
@@ -213,29 +215,29 @@ Instructions:
 3. {mode_instructions}
 4. Word count target: {word_count_range}
 {paragraph_guidance}
-5. For Full Content: final publishable text under each heading.
-   For Outline mode: just brief guidance (1-2 sentences), no full paragraphs.
+5. If Full Content: fully fleshed-out paragraphs under each heading, final publishable text.
+   If Outline mode: brief guidance only, no full paragraphs.
 
 **Example (Outline mode)**:
-**Meta Title:** My Title
-**Meta Description:** My Description
-**H1:** My H1
+**Meta Title:** Example Title
+**Meta Description:** Example Description
+**H1:** Example H1
 
 **H2: Topic Heading**
-(1-2 sentences guidance here, no full paragraphs.)
+(1-2 sentence guidance)
 
 **Example (Full Content mode)**:
-**Meta Title:** My Title
-**Meta Description:** My Description
-**H1:** My H1
+**Meta Title:** Example Title
+**Meta Description:** Example Description
+**H1:** Example H1
 
 **H2: Topic Heading**
-(Fully written paragraphs...)
+(Full paragraphs, formal tone, no filler words like "ultimate")
 
 **Final Summary**
-(Concluding paragraphs in Full Content, or brief sentences if Outline mode.)
+(Concluding section as per mode)
 
-Remember: If Outline mode, no full paragraphs. If Full Content mode, fully fleshed-out paragraphs.
+Remember: adhere strictly to the chosen mode and style.
 """
 
     try:
