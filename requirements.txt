@@ -1,5 +1,6 @@
-setuptools>=65.5.0
-wheel
+pip==24.3.1
+setuptools>=68.0.0
+wheel==0.41.2
 streamlit==1.40.2
 openai==0.27.0
 beautifulsoup4==4.12.2
