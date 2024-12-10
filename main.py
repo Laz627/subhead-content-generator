@@ -156,35 +156,36 @@ def generate_body_insights(keyword, all_paragraphs):
 def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs):
     openai.api_key = api_key
 
+    # Adjust token targets as needed
     if article_length == "Short":
-        word_count_range = "around 750 words"
-        paragraph_guidance = """
-- If Full Content: ~2 paragraphs (~100 words each) per H2; H3/H4 ~75 words each.
-- If Outline mode: Just 1-2 sentences per heading.
+        token_target = "approximately 1000 tokens"
+        paragraph_guidance = f"""
+- If Full Content: Aim for about {token_target} total. For example, each H2 might have ~2 detailed paragraphs, and H3/H4 sub-sections ~75 tokens each if needed.
+- If Outline mode: Just 1-2 sentences per heading (very brief).
+If unsure, add a few more subheadings or detail to approach ~1000 tokens.
 """
     elif article_length == "Medium":
-        word_count_range = "approximately 1250-1500 words"
-        paragraph_guidance = """
-- If Full Content: Each H2 ~2-3 paragraphs (~100 words each); H3/H4 ~100 words each.
-- If Outline mode: Just 1-2 sentences per heading.
-Use H3s/H4s to break content.
+        token_target = "approximately 2000 tokens"
+        paragraph_guidance = f"""
+- If Full Content: Aim for about {token_target} total. Each H2 could have ~2-3 detailed paragraphs (~100 tokens each), and use H3/H4 sections (~100 tokens each) to add depth.
+- If Outline mode: Just 1-2 sentences per heading (very brief).
+Use H3s/H4s to break content and reach ~2000 tokens. Add more detail if unsure.
 """
     else:  # Long
-        word_count_range = "approximately 1500-3000 words"
-        paragraph_guidance = """
-- If Full Content: Each H2 ~3 paragraphs (~100 words each); multiple H3/H4 (~100 words each).
+        token_target = "approximately 4000 tokens"
+        paragraph_guidance = f"""
+- If Full Content: Aim for about {token_target} total. Each H2 might have ~3 paragraphs (~100 tokens each), and add multiple H3/H4 (~100 tokens each) for additional depth.
 - If Outline mode: Just 1-2 sentences per heading.
-Aim for ~20-25 headings total. More headings vs. overly long sections.
+Aim for ~20-25 headings total. Use more headings and detail to reach ~4000 tokens if unsure.
 """
 
     semantic_insights = generate_semantic_insights(keyword, all_headings)
     body_insights = generate_body_insights(keyword, all_paragraphs)
 
-    # Distinguish instructions based on content_mode
     if content_mode == "Full Content":
-        mode_instructions = """You are in FULL CONTENT mode. Write fully formed, publish-ready paragraphs. No placeholder phrases. Expand details to meet the word count."""
+        mode_instructions = f"""You are in FULL CONTENT mode. Write fully formed, publish-ready paragraphs. Avoid filler language. Aim for {token_target}. If unsure, add more detail, headings, or subheadings to reach approximately that many tokens."""
     else:
-        mode_instructions = """You are in OUTLINE mode. DO NOT produce full paragraphs. Only provide 1-2 sentences of guidance under each heading, no more."""
+        mode_instructions = """You are in OUTLINE mode. Do NOT produce full paragraphs. Only provide 1-2 sentences per heading, no more."""
 
     prompt = f"""
 You are an SEO content strategist.
@@ -192,8 +193,10 @@ You are an SEO content strategist.
 Your task:
 - Target keyword: "{keyword}"
 - Mode: {content_mode} (Full Content or Outline)
-- If Full Content mode: fully written paragraphs, no placeholders.
+- If Full Content mode: produce final paragraphs, no placeholders, and aim for {token_target}.
 - If Outline mode: only brief (1-2 sentence) guidance per heading, no full paragraphs.
+
+Use a formal, factual, and direct tone. Avoid hyperbole, promotional terms like "ultimate", "comprehensive", or generic filler language. Be clear, precise, and if unsure how to reach the token target, add more subheadings or detail (in Full Content mode).
 
 **Competitor Meta and Headings**:
 {competitor_meta_info}
@@ -205,37 +208,18 @@ Your task:
 {body_insights}
 
 Instructions:
-1. Provide meta title, meta description, and H1 in this format:
+1. Provide meta title, meta description, and H1 as:
    **Meta Title:** ...
    **Meta Description:** ...
    **H1:** ...
 2. Produce H2/H3/H4 structure covering all subtopics.
 3. {mode_instructions}
-4. Word count target: {word_count_range}
+4. Token target: {token_target}
 {paragraph_guidance}
 5. For Full Content: final publishable text under each heading.
-   For Outline mode: just brief guidance (1-2 sentences), no full paragraphs.
+   For Outline mode: brief guidance only (1-2 sentences).
 
-**Example (Outline mode)**:
-**Meta Title:** My Title
-**Meta Description:** My Description
-**H1:** My H1
-
-**H2: Topic Heading**
-(1-2 sentences guidance here, no full paragraphs.)
-
-**Example (Full Content mode)**:
-**Meta Title:** My Title
-**Meta Description:** My Description
-**H1:** My H1
-
-**H2: Topic Heading**
-(Fully written paragraphs...)
-
-**Final Summary**
-(Concluding paragraphs in Full Content, or brief sentences if Outline mode.)
-
-Remember: If Outline mode, no full paragraphs. If Full Content mode, fully fleshed-out paragraphs.
+Remember: Adhere strictly to the chosen mode and the token-based length guidance.
 """
 
     try:
@@ -254,6 +238,7 @@ Remember: If Outline mode, no full paragraphs. If Full Content mode, fully flesh
     except Exception as e:
         st.error(f"Error generating optimized structure: {str(e)}")
         return None
+
 
 def create_word_document(keyword, optimized_structure):
     if not optimized_structure:
