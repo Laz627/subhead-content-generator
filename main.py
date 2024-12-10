@@ -7,7 +7,6 @@ from io import BytesIO
 import numpy as np
 import openai
 
-# Set page config
 st.set_page_config(page_title="SEO Content Outline Generator", layout="wide")
 st.title("SEO Content Outline Generator")
 
@@ -23,6 +22,8 @@ st.markdown("""
    - Long: ~1500-3000 words
 6. Click **'Generate Content Outline'**.
 7. Download the final content as a Word document.
+
+**Note:** Word counts are approximate. The model cannot measure words exactly. We have provided guidelines to encourage the correct length. Please ensure you provide enough detail to meet or slightly exceed the target word count.
 """)
 
 if 'openai_api_key' not in st.session_state:
@@ -30,11 +31,9 @@ if 'openai_api_key' not in st.session_state:
 if 'keyword' not in st.session_state:
     st.session_state.keyword = ''
 
-
 def extract_headings_and_body(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
 
-    # Remove non-content elements
     tags_to_remove = ['script', 'style', 'noscript', 'header', 'footer', 'nav', 'aside']
     for tag in tags_to_remove:
         for element in soup.find_all(tag):
@@ -66,11 +65,8 @@ def extract_headings_and_body(html_content):
         "h4": [h.get_text(separator=' ', strip=True) for h in content_to_search.find_all("h4") if h.get_text(strip=True)]
     }
 
-    # Extract body paragraphs
-    # We'll consider all <p> tags as body content, excluding empty ones.
     paragraphs = [p.get_text(separator=' ', strip=True) for p in content_to_search.find_all('p') if p.get_text(strip=True)]
 
-    # Extract meta info
     meta_title = soup.title.string.strip() if soup.title else ''
     meta_description_tag = soup.find('meta', attrs={'name': 'description'})
     meta_description = meta_description_tag['content'].strip() if meta_description_tag else ''
@@ -93,7 +89,6 @@ def analyze_headings(all_headings):
     return analysis
 
 def get_embedding(text, model="text-embedding-ada-002"):
-    # Generate an embedding for the given text
     response = openai.Embedding.create(
         input=[text],
         model=model
@@ -104,7 +99,6 @@ def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a)*np.linalg.norm(b))
 
 def generate_semantic_insights(keyword, all_headings):
-    # Flatten all competitor h2/h3/h4 headings
     competitor_headings = []
     for h_set in all_headings:
         competitor_headings.extend(h_set["h2"])
@@ -127,17 +121,16 @@ def generate_semantic_insights(keyword, all_headings):
         scored.append((ch, score))
 
     scored.sort(key=lambda x: x[1], reverse=True)
-
     top_headings = [x[0] for x in scored[:5]]
-    summary = "Based on semantic analysis of competitor headings related to your keyword, here are topically relevant areas:\n"
+
+    summary = "Based on competitor headings related to your keyword, consider these topically relevant areas:\n"
     for th in top_headings:
         summary += f"- {th}\n"
 
-    summary += "\nThese suggest key areas of interest for your article."
+    summary += "\nThese headings suggest key areas of interest for your article."
     return summary.strip()
 
 def generate_body_insights(keyword, all_paragraphs):
-    # Flatten all paragraphs from all competitors
     competitor_paragraphs = [p for plist in all_paragraphs for p in plist if len(p.split()) > 5]
 
     if not competitor_paragraphs:
@@ -156,10 +149,9 @@ def generate_body_insights(keyword, all_paragraphs):
 
     scored.sort(key=lambda x: x[1], reverse=True)
 
-    # Select top 5 relevant paragraphs
     top_paras = [x[0] for x in scored[:5]]
 
-    insights = "Competitor Body Insights (top relevant paragraphs to inform content):\n"
+    insights = "Competitor Body Insights (relevant paragraphs):\n"
     for i, tp in enumerate(top_paras, 1):
         insights += f"\nParagraph {i}:\n{tp}\n"
     return insights.strip()
@@ -169,41 +161,27 @@ def generate_optimized_structure_with_insights(keyword, heading_analysis, compet
 
     if article_length == "Short":
         word_count_range = "around 750 words"
-        base_min, base_max = 5, 8
+        suggested_min, suggested_max = 5, 8
+        paragraph_guidance = """
+- Aim for ~5-8 total headings.
+- For Full Content: Each H2 should have ~2 paragraphs (~100 words each), and if using H3/H4, at least one ~75-word paragraph each.
+- If unsure, add more detail to ensure ~750 words total.
+"""
     elif article_length == "Medium":
         word_count_range = "approximately 1250-1500 words"
-        base_min, base_max = 12, 15
+        suggested_min, suggested_max = 12, 15
+        paragraph_guidance = """
+- Aim for ~12-15 total headings.
+- For Full Content: Each H2 should have ~3 paragraphs (~100 words each), and each H3/H4 at least one ~100-word paragraph.
+- Err on the side of more content if unsure, to reach 1250-1500 words.
+"""
     else:  # Long
         word_count_range = "approximately 1500-3000 words"
-        base_min, base_max = 15, 20
-
-    total_competitor_headings = heading_analysis.get("total_headings_count", 0)
-    extra = min((total_competitor_headings - 20) // 10, base_max - base_min) if total_competitor_headings > 20 else 0
-    suggested_min = base_min + extra
-    suggested_max = base_max + extra
-    suggested_min = min(suggested_min, suggested_max)
-
-    length_instruction = f"""
-Your article should be {word_count_range}. 
-Aim for roughly {suggested_min}-{suggested_max} total headings (H2/H3/H4 combined) to ensure topical completeness.
-"""
-
-    if content_mode == "Full Content":
-        content_instructions = f"""
-For each **H2** heading:
-- Provide several paragraphs (at least 2-3 paragraphs) of fully written content directly under the heading.
-- If you use **H3** or **H4** headings, also provide at least one full paragraph under each subheading.
-- The goal is a fully fleshed-out article, not just brief guidance.
-- Meet the {word_count_range} target.
-
-Do not include "Content Guidance." Instead, write full content directly under each heading.
-"""
-    else:
-        content_instructions = """
-For each heading:
-- Provide a brief (1-2 sentences) description of what should be covered. No full paragraphs needed.
-
-Do not include "Content Guidance." Just write brief guidance directly under the heading.
+        suggested_min, suggested_max = 15, 20
+        paragraph_guidance = """
+- Aim for ~15-20 total headings.
+- For Full Content: Each H2 should have ~3-4 paragraphs (~100 words each), and each H3/H4 at least one ~100-word paragraph.
+- If unsure, add more detail to ensure at least 1500 words, preferably closer to 2000 words or more if needed.
 """
 
     semantic_insights = generate_semantic_insights(keyword, all_headings)
@@ -214,8 +192,8 @@ You are an SEO content strategist.
 
 Your task:
 - Create an optimized content structure for a new article targeting the keyword "{keyword}".
-- If "Full Content" mode is chosen, produce fully written article content under each heading.
-- If "Outline" mode is chosen, provide brief guidance (1-2 sentences) under each heading.
+- If "Full Content" mode: produce fully written, detailed paragraphs under each heading.
+- If "Outline" mode: just provide 1-2 sentences per heading as guidance.
 
 **Competitor Meta and Headings**:
 {competitor_meta_info}
@@ -227,23 +205,29 @@ Your task:
 {body_insights}
 
 Instructions:
-1. Recommend an optimized meta title, meta description, and H1 tag.
-2. Generate an optimized heading structure (H2/H3/H4) covering important subtopics.
-3. Ensure logical flow and comprehensive coverage.
-4. Provide a final summary at the end.
-5. Follow word count and heading count guidelines.
+1. Provide a meta title, meta description, and H1 tag.
+2. Produce an optimized heading structure (H2/H3/H4) covering all relevant subtopics.
+3. Ensure logical flow, comprehensiveness, and topical completeness.
+4. Include a final summary.
+5. Follow length guidelines strictly: {word_count_range} total.
+{paragraph_guidance}
 
-{length_instruction}
+For Full Content mode:
+- No "Content Guidance" labels.
+- Write full paragraphs directly under each heading.
+- Use the paragraph and word count hints above to achieve the desired total length.
+- If unsure, add more detail/paragraphs to meet or exceed the word count target.
 
-{content_instructions}
+For Outline mode:
+- Just 1-2 sentences per heading, no full paragraphs needed.
 
 **Formatting:**
 - `**H2: Heading Title**` for main sections.
-- `**H3: Subheading Title**` and `**H4: Sub-subheading Title**` for detail.
-- Full Content mode: full paragraphs under each heading.
-- Outline mode: brief guidance under each heading.
+- `**H3: Subheading Title**` and `**H4: Sub-subheading Title**` for additional detail.
+- In Full Content mode, produce the full content under each heading.
+- In Outline mode, brief guidance (1-2 sentences) under each heading.
 
-Format Example:
+Example Format:
 
 **Meta Title Recommendation:**
 [Your meta title]
@@ -263,26 +247,26 @@ Format Example:
 **Content Outline:**
 
 **H2: Example Heading**
-[Content or brief guidance]
+[Full paragraphs or brief guidance]
 
 **H3: Example Subheading**
-[Content or brief guidance]
+[Full paragraph(s) or brief guidance]
 
 ---
 
 **Final Summary**
-[Content or brief summary]
+[Full paragraphs or brief summary]
 ---
 """
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a helpful SEO content strategist. Produce full content if in Full Content mode."},
+                {"role": "system", "content": "You are a helpful SEO content strategist. Produce more text rather than less if unsure about word counts."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.6,
+            temperature=0.7,
             max_tokens=7000
         )
 
@@ -363,7 +347,7 @@ if st.button("Generate Content Outline"):
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        status_text.text("Extracting headings and body content from competitor pages...")
+        status_text.text("Extracting data from competitor pages...")
         all_headings = []
         all_paragraphs = []
         competitor_meta_info = ''
@@ -388,7 +372,7 @@ if st.button("Generate Content Outline"):
         heading_analysis = analyze_headings(all_headings)
 
         progress_bar.progress(50)
-        status_text.text("Generating optimized content structure with insights...")
+        status_text.text("Generating optimized content structure...")
 
         optimized_structure = generate_optimized_structure_with_insights(
             keyword, heading_analysis, competitor_meta_info, openai_api_key, content_mode, article_length, all_headings, all_paragraphs
