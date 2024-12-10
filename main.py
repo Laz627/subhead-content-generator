@@ -23,10 +23,14 @@ st.markdown("""
 6. Click **'Generate Content Outline'**.
 7. Download the final content as a Word document.
 
-**Note:**  
-- The model cannot measure words exactly. It will try to meet or exceed the target word count.  
-- In "Full Content" mode, produce **final, ready-to-publish paragraphs**. Avoid phrases like "This section will discuss...". Just present the information directly and in a completed form.
-- Write as if the article is fully complete and published, providing all details directly.
+### Important Guidelines:
+- **Full Content Mode:** Provide fully written, ready-to-publish content. Avoid placeholder phrases like "this section will...". Present final, polished text directly under each heading.
+- **Use of Headings:** For longer content, use more H3 (and possibly H4) headings to break down sections instead of making a single overly verbose section.
+- **Meta Title, Description, and H1 Format:**  
+  Use `**Meta Title:** <Your Title>`  
+  Use `**Meta Description:** <Your Description>`  
+  Use `**H1:** <Your H1>`  
+- **If Full Content:** Expand on details thoroughly and err on producing more text if unsure.
 """)
 
 if 'openai_api_key' not in st.session_state:
@@ -126,11 +130,10 @@ def generate_semantic_insights(keyword, all_headings):
     scored.sort(key=lambda x: x[1], reverse=True)
     top_headings = [x[0] for x in scored[:5]]
 
-    summary = "Based on competitor headings related to your keyword, consider these topically relevant areas:\n"
+    summary = "Topically relevant areas based on competitor headings:\n"
     for th in top_headings:
         summary += f"- {th}\n"
-
-    summary += "\nThese headings suggest key areas of interest for your article."
+    summary += "\nConsider covering these topics thoroughly."
     return summary.strip()
 
 def generate_body_insights(keyword, all_paragraphs):
@@ -162,94 +165,84 @@ def generate_body_insights(keyword, all_paragraphs):
 def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs):
     openai.api_key = api_key
 
-    # Adjust heading counts and paragraph instructions as needed
     if article_length == "Short":
         word_count_range = "around 750 words"
         paragraph_guidance = """
-- Aim for 8-10 total headings.
-- For Full Content: ~2 paragraphs (~100 words each) per H2. H3/H4 get ~75 words each.
-- Do not write about what you 'will' discuss, just present the information directly.
+- Aim for ~8-10 total headings.
+- Full Content: ~2 paragraphs (~100 words each) per H2; H3/H4 add ~75 words each.
 """
     elif article_length == "Medium":
         word_count_range = "approximately 1250-1500 words"
         paragraph_guidance = """
-- Aim for 15-18 total headings.
-- For Full Content: Each H2 ~2-3 paragraphs (~100 words each). H3/H4 ~100 words each.
-- Include sufficient headings and subheadings to reach ~1250-1500 words.
-- Do not say 'this section will discuss'; present the content as final text.
+- Aim for ~15-18 total headings.
+- Full Content: Each H2 ~2-3 paragraphs (~100 words each); H3/H4 ~100 words each.
+- Use H3s (and a few H4s if needed) to break up content.
 """
     else:  # Long
         word_count_range = "approximately 1500-3000 words"
         paragraph_guidance = """
-- Aim for 20-25 total headings.
-- For Full Content: Each H2 ~3 paragraphs (~100 words each). Use multiple H3/H4 subheadings (each ~100 words).
-- If unsure, add more detail to exceed 1500 words.
-- Avoid future-tense placeholders. Present all content as if final.
+- Aim for ~20-25 total headings (H2/H3/H4) to break down content.
+- Full Content: Each H2 ~3 paragraphs (~100 words each). Use multiple H3/H4 (each ~100 words) instead of overly long paragraphs.
+- Err on the side of more detail.
 """
 
     semantic_insights = generate_semantic_insights(keyword, all_headings)
     body_insights = generate_body_insights(keyword, all_paragraphs)
 
-    # Add explicit instructions to avoid placeholder language
     prompt = f"""
 You are an SEO content strategist.
 
 Your task:
-- Create an optimized content structure for an article targeting "{keyword}".
-- "Full Content" mode: fully written paragraphs (no placeholders like "this section will..."). Present final, ready-to-publish text.
-- "Outline" mode: 1-2 sentence guidance per heading.
+- Create a comprehensive article on "{keyword}".
+- If Full Content mode: Provide fully written, polished paragraphs with no placeholder language. Present final text.
+- For longer content, use more H3 (and possibly H4) headings to break up sections rather than a few long paragraphs.
 
 **Competitor Meta and Headings**:
 {competitor_meta_info}
 
-**Competitor Semantic Insights (from headings)**:
+**Competitor Semantic Insights**:
 {semantic_insights}
 
-**Competitor Body Insights (from paragraphs)**:
+**Competitor Body Insights**:
 {body_insights}
 
 Instructions:
-1. Provide meta title, meta description, and H1.
-2. Produce heading structure (H2/H3/H4) covering all subtopics.
-3. Ensure logical flow, comprehensive coverage.
-4. Include a final summary.
-5. Word count target: {word_count_range}
+1. Provide meta title, meta description, and H1 using this format:
+   **Meta Title:** Your Title  
+   **Meta Description:** Your Description  
+   **H1:** Your H1
+2. Produce a heading structure (H2/H3/H4) covering all subtopics.
+3. No placeholders. No "this section will..." language. Just present final info.
+4. Ensure logical flow, comprehensive coverage.
+5. Word count: {word_count_range}
 {paragraph_guidance}
 
-Additional Important Instructions:
-- In Full Content mode, write as if the article is final and already published.
-- Do NOT say "this section will discuss". Instead, directly provide the information.
-- Expand on details thoroughly. If needed, err on writing more content.
-- Provide actual facts, descriptions, and explanations directly under each heading.
+**Formatting Example (Full Content Mode)**:
+**Meta Title:** The Ultimate Guide to Standard Window Sizes: Dimensions, Types, and Benefits  
+**Meta Description:** Discover everything you need...  
+**H1:** A Comprehensive Guide to Standard Window Sizes
 
-**Formatting:**
-- `**H2: Heading Title**`
-- `**H3: Subheading Title**`, `**H4: Sub-subheading Title**`
-- Full Content mode: full paragraphs, final text.
-- Outline mode: brief guidance.
+**H2: What Are Standard Window Sizes?**
+(Final, ready-to-publish paragraphs here...)
 
-Example (Full Content mode):
-**H2: Example Heading**
-Write full paragraphs here, describing the topic as if final.
-
----
+**H3: Example Subtopic**
+(Fully written paragraph here...)
 
 **Final Summary**
-Final concluding paragraphs, fully written.
+(Concluding paragraphs in final form.)
 
-No placeholders or references to “this section” or “we will discuss”.
-
+Remember: Avoid placeholder phrases, produce final publishable text.
 """
 
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful SEO content strategist. Produce fully written, ready-to-publish content in Full Content mode. Avoid placeholders."},
+                {"role": "system", "content": "You are a helpful SEO content strategist. Produce final publishable content if in Full Content mode, using headings as instructed."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.6,
-            max_tokens=16384
+            temperature=0.7,
+            max_tokens=7000
         )
 
         output = response.choices[0].message.content
@@ -285,25 +278,26 @@ def create_word_document(keyword, optimized_structure):
     lines = optimized_structure.strip().split('\n')
     for line in lines:
         line = line.strip()
-        if line.startswith('**Meta Title Recommendation:**'):
-            doc.add_heading('Meta Title Recommendation', level=4)
-        elif line.startswith('**Meta Description Recommendation:**'):
-            doc.add_heading('Meta Description Recommendation', level=4)
-        elif line.startswith('**H1 Tag Recommendation:**'):
-            doc.add_heading('H1 Tag Recommendation', level=4)
-        elif line.startswith('**Content Outline:**'):
-            doc.add_heading('Content Outline', level=1)
-        elif line.startswith('**Final Summary**'):
-            doc.add_heading('Final Summary', level=1)
+        if line.startswith('**Meta Title:**'):
+            doc.add_heading('Meta Title', level=4)
+            doc.add_paragraph(line.replace('**Meta Title:**', '').strip())
+        elif line.startswith('**Meta Description:**'):
+            doc.add_heading('Meta Description', level=4)
+            doc.add_paragraph(line.replace('**Meta Description:**', '').strip())
+        elif line.startswith('**H1:**'):
+            doc.add_heading('H1', level=4)
+            doc.add_paragraph(line.replace('**H1:**', '').strip())
         elif line.startswith('**H2:'):
             heading_text = line.replace('**H2:', '').replace('**', '').strip()
-            doc.add_heading(f"H2: {heading_text}", level=2)
+            doc.add_heading(heading_text, level=2)
         elif line.startswith('**H3:'):
             heading_text = line.replace('**H3:', '').replace('**', '').strip()
-            doc.add_heading(f"H3: {heading_text}", level=3)
+            doc.add_heading(heading_text, level=3)
         elif line.startswith('**H4:'):
             heading_text = line.replace('**H4:', '').replace('**', '').strip()
-            doc.add_heading(f"H4: {heading_text}", level=4)
+            doc.add_heading(heading_text, level=4)
+        elif line.startswith('**Final Summary**'):
+            doc.add_heading('Final Summary', level=1)
         elif line == '---':
             continue
         else:
