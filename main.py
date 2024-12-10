@@ -1,7 +1,6 @@
 import streamlit as st
 from bs4 import BeautifulSoup
 from collections import Counter
-from openai import OpenAI
 from docx import Document
 from docx.shared import Pt
 from io import BytesIO
