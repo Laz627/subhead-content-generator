@@ -1,5 +1,3 @@
-How would you optimize the following content outline generator script to leverage o3-mini's API: 
-
 import streamlit as st
 from bs4 import BeautifulSoup
 from collections import Counter
