@@ -1,6 +1,6 @@
 setuptools>=68.0.0
 wheel
-streamlit==1.40.2
+streamlit
 openai==0.27.0
 beautifulsoup4==4.12.2
 python-docx
