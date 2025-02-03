@@ -1,3 +1,5 @@
+How would you optimize the following content outline generator script to leverage o3-mini's API: 
+
 import streamlit as st
 from bs4 import BeautifulSoup
 from collections import Counter
@@ -6,7 +8,6 @@ from docx.shared import Pt
 from io import BytesIO
 import numpy as np
 import openai
-import re
 
 st.set_page_config(page_title="SEO Content Outline Generator", layout="wide")
 st.title("SEO Content Outline Generator")
@@ -30,12 +31,9 @@ if 'openai_api_key' not in st.session_state:
 if 'keyword' not in st.session_state:
     st.session_state.keyword = ''
 
-# -----------------------------------------------
-# Helper functions (HTML extraction, cosine_similarity, etc.)
-# -----------------------------------------------
-
 def extract_headings_and_body(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
+
     tags_to_remove = ['script', 'style', 'noscript', 'header', 'footer', 'nav', 'aside']
     for tag in tags_to_remove:
         for element in soup.find_all(tag):
@@ -68,57 +66,63 @@ def extract_headings_and_body(html_content):
     }
 
     paragraphs = [p.get_text(separator=' ', strip=True) for p in content_to_search.find_all('p') if p.get_text(strip=True)]
+
     meta_title = soup.title.string.strip() if soup.title else ''
     meta_description_tag = soup.find('meta', attrs={'name': 'description'})
     meta_description = meta_description_tag['content'].strip() if meta_description_tag else ''
 
     return meta_title, meta_description, headings, paragraphs
 
-def cosine_similarity(a, b):
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+def analyze_headings(all_headings):
+    analysis = {}
+    total_headings_count = 0
+    for level in ["h1", "h2", "h3", "h4"]:
+        level_headings = [h for url_headings in all_headings for h in url_headings[level]]
+        total_headings_count += len(level_headings)
+        analysis[level] = {
+            "count": len(level_headings),
+            "avg_length": sum(len(h) for h in level_headings) / len(level_headings) if level_headings else 0,
+            "common_words": Counter(" ".join(level_headings).lower().split()).most_common(10),
+            "examples": level_headings[:10]
+        }
+    analysis["total_headings_count"] = total_headings_count
+    return analysis
 
-# -----------------------------------------------
-# New / Optimized Embedding Functions
-# -----------------------------------------------
-
-# Cache the embedding of the keyword so that if the same keyword is used again,
-# you avoid an extra API call.
-@st.cache(suppress_st_warning=True)
-def get_keyword_embedding(text, model="text-embedding-ada-002"):
-    response = openai.Embedding.create(input=[text], model=model)
+def get_embedding(text, model="text-embedding-ada-002"):
+    response = openai.Embedding.create(
+        input=[text],
+        model=model
+    )
     return np.array(response['data'][0]['embedding'], dtype=np.float32)
 
-def get_batch_embeddings(texts, model="text-embedding-ada-002"):
-    """
-    Batch request embeddings for a list of texts.
-    """
-    response = openai.Embedding.create(input=texts, model=model)
-    return [np.array(item['embedding'], dtype=np.float32) for item in response['data']]
-
-# -----------------------------------------------
-# Updated Insights Functions with Batched Embeddings
-# -----------------------------------------------
+def cosine_similarity(a, b):
+    return np.dot(a, b) / (np.linalg.norm(a)*np.linalg.norm(b))
 
 def generate_semantic_insights(keyword, all_headings):
     competitor_headings = []
     for h_set in all_headings:
-        # Use .get(...) in case any level is missing
-        competitor_headings.extend(h_set.get("h2", []))
-        competitor_headings.extend(h_set.get("h3", []))
-        competitor_headings.extend(h_set.get("h4", []))
-    
+        competitor_headings.extend(h_set["h2"])
+        competitor_headings.extend(h_set["h3"])
+        competitor_headings.extend(h_set["h4"])
+
     if not competitor_headings:
         return "No additional semantic insights available."
-    
-    keyword_emb = get_keyword_embedding(keyword)
-    # Batch request embeddings for all competitor headings
-    heading_embeddings = get_batch_embeddings(competitor_headings)
-    
-    scored = [(ch, cosine_similarity(keyword_emb, emb))
-              for ch, emb in zip(competitor_headings, heading_embeddings)]
+
+    keyword_emb = get_embedding(keyword)
+
+    heading_embeddings = []
+    for ch in competitor_headings:
+        emb = get_embedding(ch)
+        heading_embeddings.append((ch, emb))
+
+    scored = []
+    for ch, emb in heading_embeddings:
+        score = cosine_similarity(keyword_emb, emb)
+        scored.append((ch, score))
+
     scored.sort(key=lambda x: x[1], reverse=True)
     top_headings = [x[0] for x in scored[:5]]
-    
+
     summary = "Topically relevant areas based on competitor headings:\n"
     for th in top_headings:
         summary += f"- {th}\n"
@@ -127,48 +131,30 @@ def generate_semantic_insights(keyword, all_headings):
 
 def generate_body_insights(keyword, all_paragraphs):
     competitor_paragraphs = [p for plist in all_paragraphs for p in plist if len(p.split()) > 5]
-    
+
     if not competitor_paragraphs:
         return "No additional body insights available."
-    
-    keyword_emb = get_keyword_embedding(keyword)
-    # Batch request embeddings for competitor paragraphs
-    paragraph_embeddings = get_batch_embeddings(competitor_paragraphs)
-    
-    scored = [(para, cosine_similarity(keyword_emb, emb))
-              for para, emb in zip(competitor_paragraphs, paragraph_embeddings)]
+
+    keyword_emb = get_embedding(keyword)
+    paragraph_embeddings = []
+    for para in competitor_paragraphs:
+        emb = get_embedding(para)
+        paragraph_embeddings.append((para, emb))
+
+    scored = []
+    for para, emb in paragraph_embeddings:
+        score = cosine_similarity(keyword_emb, emb)
+        scored.append((para, score))
+
     scored.sort(key=lambda x: x[1], reverse=True)
+
     top_paras = [x[0] for x in scored[:5]]
-    
+
     insights = "Competitor Body Insights (relevant paragraphs):\n"
     for i, tp in enumerate(top_paras, 1):
         insights += f"\nParagraph {i}:\n{tp}\n"
     return insights.strip()
 
-# -----------------------------------------------
-# Function to validate the generated output against the required template
-# -----------------------------------------------
-def validate_output(output):
-    required_markers = [
-        r"\*\*Meta Title:\*\*",
-        r"\*\*Meta Description:\*\*",
-        r"\*\*H1:\*\*",
-        r"\*\*H2:",
-        r"\*\*Final Summary\*\*"
-    ]
-    
-    errors = []
-    for marker in required_markers:
-        if not re.search(marker, output):
-            errors.append(f"Missing required element: {marker}")
-    
-    if errors:
-        return False, errors
-    return True, "All required elements found."
-
-# -----------------------------------------------
-# Generate Optimized Structure with Insights
-# -----------------------------------------------
 def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs):
     openai.api_key = api_key
 
@@ -193,44 +179,46 @@ Use H3s/H4s to break content.
 Aim for ~20-25 headings total. More headings vs. overly long sections.
 """
 
-    # Get the insights from competitor data
     semantic_insights = generate_semantic_insights(keyword, all_headings)
     body_insights = generate_body_insights(keyword, all_paragraphs)
 
-    # Summarize competitor meta info to avoid overloading the prompt
-    competitor_summary = competitor_meta_info[:500] + "..." if len(competitor_meta_info) > 500 else competitor_meta_info
+    # Distinguish instructions based on content_mode
+    if content_mode == "Full Content":
+        mode_instructions = """You are in FULL CONTENT mode. Write fully formed, publish-ready paragraphs. No placeholder phrases. Expand details to meet the word count."""
+    else:
+        mode_instructions = """You are in OUTLINE mode. DO NOT produce full paragraphs. Only provide 1-2 sentences of guidance under each heading, no more."""
 
-    # IMPORTANT: Explicit instructions must come first.
     prompt = f"""
-IMPORTANT: Your output MUST include the following sections EXACTLY as formatted:
-**Meta Title:** [Your meta title here]
-**Meta Description:** [Your meta description here]
-**H1:** [Your H1 here]
-**H2:** [Your H2 headings and guidance]
-...
-**Final Summary:** [Your final summary here]
+You are an SEO content strategist.
 
-Do NOT output any competitor data verbatim. Use the competitor insights below only for context.
-
-[Competitor Data Summary]:
-{competitor_summary}
-
-Now, create a content outline for the target keyword "{keyword}" with the following requirements:
+Your task:
+- Target keyword: "{keyword}"
 - Mode: {content_mode} (Full Content or Outline)
-- Word Count Target: {word_count_range}
-- {paragraph_guidance}
+- If Full Content mode: fully written paragraphs, no placeholders.
+- If Outline mode: only brief (1-2 sentence) guidance per heading, no full paragraphs.
+
+**Competitor Meta and Headings**:
+{competitor_meta_info}
+
+**Competitor Semantic Insights**:
+{semantic_insights}
+
+**Competitor Body Insights**:
+{body_insights}
 
 Instructions:
 1. Provide meta title, meta description, and H1 in this format:
    **Meta Title:** ...
    **Meta Description:** ...
    **H1:** ...
-2. Produce a structured outline with H2, H3, and H4 headings covering all subtopics.
-3. { "Write fully formed, publish-ready paragraphs under each heading." if content_mode == "Full Content" 
-           else "Provide only 1-2 sentence guidance under each heading (no full paragraphs)." }
-4. End with a **Final Summary** section.
+2. Produce H2/H3/H4 structure covering all subtopics.
+3. {mode_instructions}
+4. Word count target: {word_count_range}
+{paragraph_guidance}
+5. For Full Content: final publishable text under each heading.
+   For Outline mode: just brief guidance (1-2 sentences), no full paragraphs.
 
-**Example (Outline mode):**
+**Example (Outline mode)**:
 **Meta Title:** My Title
 **Meta Description:** My Description
 **H1:** My H1
@@ -238,38 +226,37 @@ Instructions:
 **H2: Topic Heading**
 (1-2 sentences guidance here, no full paragraphs.)
 
-**Final Summary**
-(A brief concluding summary.)
+**Example (Full Content mode)**:
+**Meta Title:** My Title
+**Meta Description:** My Description
+**H1:** My H1
 
-Remember: Do not output any competitor data. Follow the template exactly.
+**H2: Topic Heading**
+(Fully written paragraphs...)
+
+**Final Summary**
+(Concluding paragraphs in Full Content, or brief sentences if Outline mode.)
+
+Remember: If Outline mode, no full paragraphs. If Full Content mode, fully fleshed-out paragraphs.
 """
 
     try:
         response = openai.ChatCompletion.create(
-            model="o3-mini",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful SEO content strategist. Follow the instructions exactly."},
+                {"role": "system", "content": "You are a helpful SEO content strategist."},
                 {"role": "user", "content": prompt}
             ],
-            max_completion_tokens=16000
+            temperature=0.5,
+            max_tokens=16000
         )
 
         output = response.choices[0].message.content
-
-        # Validate the output against our required template
-        valid, validation_message = validate_output(output)
-        if not valid:
-            st.error("Validation errors in generated output: " + "; ".join(validation_message))
-            return None
-
         return output
     except Exception as e:
         st.error(f"Error generating optimized structure: {str(e)}")
         return None
 
-# -----------------------------------------------
-# Word Document Creation Function
-# -----------------------------------------------
 def create_word_document(keyword, optimized_structure):
     if not optimized_structure:
         st.error("No content to create document.")
@@ -326,9 +313,6 @@ def create_word_document(keyword, optimized_structure):
 
     return doc
 
-# -----------------------------------------------
-# Streamlit UI and Main Application Logic
-# -----------------------------------------------
 st.write("Enter your API key, target keyword, and upload competitor files:")
 openai_api_key = st.text_input("OpenAI API key:", value=st.session_state.openai_api_key, type="password")
 keyword = st.text_input("Target keyword:", value=st.session_state.keyword)
@@ -366,22 +350,6 @@ if st.button("Generate Content Outline"):
 
         progress_bar.progress(33)
         status_text.text("Analyzing headings...")
-
-        # Analyze headings across all competitor files.
-        def analyze_headings(all_headings):
-            analysis = {}
-            total_headings_count = 0
-            for level in ["h1", "h2", "h3", "h4"]:
-                level_headings = [h for url_headings in all_headings for h in url_headings[level]]
-                total_headings_count += len(level_headings)
-                analysis[level] = {
-                    "count": len(level_headings),
-                    "avg_length": sum(len(h) for h in level_headings) / len(level_headings) if level_headings else 0,
-                    "common_words": Counter(" ".join(level_headings).lower().split()).most_common(10),
-                    "examples": level_headings[:10]
-                }
-            analysis["total_headings_count"] = total_headings_count
-            return analysis
 
         heading_analysis = analyze_headings(all_headings)
 
