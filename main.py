@@ -83,7 +83,7 @@ def cosine_similarity(a, b):
 
 # Cache the embedding of the keyword so that if the same keyword is used again,
 # you avoid an extra API call.
-@st.experimental_memo(show_spinner=False)
+@st.cache(suppress_st_warning=True)
 def get_keyword_embedding(text, model="text-embedding-ada-002"):
     response = openai.Embedding.create(input=[text], model=model)
     return np.array(response['data'][0]['embedding'], dtype=np.float32)
