@@ -240,7 +240,7 @@ Remember: If Outline mode, no full paragraphs. If Full Content mode, fully flesh
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="o3-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful SEO content strategist."},
                 {"role": "user", "content": prompt}
