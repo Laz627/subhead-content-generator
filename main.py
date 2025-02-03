@@ -153,7 +153,7 @@ def generate_body_insights(keyword, all_paragraphs):
         insights += f"\nParagraph {i}:\n{tp}\n"
     return insights.strip()
 
-def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs):
+def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs, temperature=0.5):
     openai.api_key = api_key
 
     if article_length == "Short":
@@ -245,7 +245,7 @@ Remember: If Outline mode, no full paragraphs. If Full Content mode, fully flesh
                 {"role": "system", "content": "You are a helpful SEO content strategist."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.5,
+            temperature=temperature,
             max_tokens=16000
         )
 
@@ -316,6 +316,16 @@ openai_api_key = st.text_input("OpenAI API key:", value=st.session_state.openai_
 keyword = st.text_input("Target keyword:", value=st.session_state.keyword)
 content_mode = st.radio("Content Generation Mode:", ("Just Outline & Guidance", "Full Content"))
 article_length = st.radio("Article Length:", ("Short", "Medium", "Long"))
+
+# Add a slider to adjust the generation temperature.
+temperature = st.slider(
+    "Generation Temperature (controls randomness):",
+    min_value=0.0,
+    max_value=1.0,
+    value=0.5,
+    step=0.1
+)
+
 uploaded_competitor_files = st.file_uploader("Upload competitor HTML files:", type=['html', 'htm'], accept_multiple_files=True)
 
 st.session_state.openai_api_key = openai_api_key
@@ -355,7 +365,15 @@ if st.button("Generate Content Outline"):
         status_text.text("Generating optimized content structure...")
 
         optimized_structure = generate_optimized_structure_with_insights(
-            keyword, heading_analysis, competitor_meta_info, openai_api_key, content_mode, article_length, all_headings, all_paragraphs
+            keyword,
+            heading_analysis,
+            competitor_meta_info,
+            openai_api_key,
+            content_mode,
+            article_length,
+            all_headings,
+            all_paragraphs,
+            temperature=temperature  # Pass the user-selected temperature here
         )
 
         if optimized_structure:
