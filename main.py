@@ -169,7 +169,6 @@ def validate_output(output):
 # -----------------------------------------------
 # Generate Optimized Structure with Insights
 # -----------------------------------------------
-
 def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs):
     openai.api_key = api_key
 
@@ -194,46 +193,44 @@ Use H3s/H4s to break content.
 Aim for ~20-25 headings total. More headings vs. overly long sections.
 """
 
+    # Get the insights from competitor data
     semantic_insights = generate_semantic_insights(keyword, all_headings)
     body_insights = generate_body_insights(keyword, all_paragraphs)
 
-    # Distinguish instructions based on content_mode
-    if content_mode == "Full Content":
-        mode_instructions = """You are in FULL CONTENT mode. Write fully formed, publish-ready paragraphs. No placeholder phrases. Expand details to meet the word count."""
-    else:
-        mode_instructions = """You are in OUTLINE mode. DO NOT produce full paragraphs. Only provide 1-2 sentences of guidance under each heading, no more."""
+    # Summarize competitor meta info to avoid overloading the prompt
+    competitor_summary = competitor_meta_info[:500] + "..." if len(competitor_meta_info) > 500 else competitor_meta_info
 
+    # IMPORTANT: Explicit instructions must come first.
     prompt = f"""
-You are an SEO content strategist.
+IMPORTANT: Your output MUST include the following sections EXACTLY as formatted:
+**Meta Title:** [Your meta title here]
+**Meta Description:** [Your meta description here]
+**H1:** [Your H1 here]
+**H2:** [Your H2 headings and guidance]
+...
+**Final Summary:** [Your final summary here]
 
-Your task:
-- Target keyword: "{keyword}"
+Do NOT output any competitor data verbatim. Use the competitor insights below only for context.
+
+[Competitor Data Summary]:
+{competitor_summary}
+
+Now, create a content outline for the target keyword "{keyword}" with the following requirements:
 - Mode: {content_mode} (Full Content or Outline)
-- If Full Content mode: fully written paragraphs, no placeholders.
-- If Outline mode: only brief (1-2 sentence) guidance per heading, no full paragraphs.
-
-**Competitor Meta and Headings**:
-{competitor_meta_info}
-
-**Competitor Semantic Insights**:
-{semantic_insights}
-
-**Competitor Body Insights**:
-{body_insights}
+- Word Count Target: {word_count_range}
+- {paragraph_guidance}
 
 Instructions:
 1. Provide meta title, meta description, and H1 in this format:
    **Meta Title:** ...
    **Meta Description:** ...
    **H1:** ...
-2. Produce H2/H3/H4 structure covering all subtopics.
-3. {mode_instructions}
-4. Word count target: {word_count_range}
-{paragraph_guidance}
-5. For Full Content: final publishable text under each heading.
-   For Outline mode: just brief guidance (1-2 sentences), no full paragraphs.
+2. Produce a structured outline with H2, H3, and H4 headings covering all subtopics.
+3. { "Write fully formed, publish-ready paragraphs under each heading." if content_mode == "Full Content" 
+           else "Provide only 1-2 sentence guidance under each heading (no full paragraphs)." }
+4. End with a **Final Summary** section.
 
-**Example (Outline mode)**:
+**Example (Outline mode):**
 **Meta Title:** My Title
 **Meta Description:** My Description
 **H1:** My H1
@@ -241,28 +238,20 @@ Instructions:
 **H2: Topic Heading**
 (1-2 sentences guidance here, no full paragraphs.)
 
-**Example (Full Content mode)**:
-**Meta Title:** My Title
-**Meta Description:** My Description
-**H1:** My H1
-
-**H2: Topic Heading**
-(Fully written paragraphs...)
-
 **Final Summary**
-(Concluding paragraphs in Full Content, or brief sentences if Outline mode.)
+(A brief concluding summary.)
 
-Remember: If Outline mode, no full paragraphs. If Full Content mode, fully fleshed-out paragraphs.
+Remember: Do not output any competitor data. Follow the template exactly.
 """
 
     try:
         response = openai.ChatCompletion.create(
             model="o3-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful SEO content strategist."},
+                {"role": "system", "content": "You are a helpful SEO content strategist. Follow the instructions exactly."},
                 {"role": "user", "content": prompt}
             ],
-            max_completion_tokens=16000
+            max_tokens=16000
         )
 
         output = response.choices[0].message.content
@@ -281,7 +270,6 @@ Remember: If Outline mode, no full paragraphs. If Full Content mode, fully flesh
 # -----------------------------------------------
 # Word Document Creation Function
 # -----------------------------------------------
-
 def create_word_document(keyword, optimized_structure):
     if not optimized_structure:
         st.error("No content to create document.")
@@ -341,7 +329,6 @@ def create_word_document(keyword, optimized_structure):
 # -----------------------------------------------
 # Streamlit UI and Main Application Logic
 # -----------------------------------------------
-
 st.write("Enter your API key, target keyword, and upload competitor files:")
 openai_api_key = st.text_input("OpenAI API key:", value=st.session_state.openai_api_key, type="password")
 keyword = st.text_input("Target keyword:", value=st.session_state.keyword)
