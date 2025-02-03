@@ -29,9 +29,13 @@ if 'openai_api_key' not in st.session_state:
 if 'keyword' not in st.session_state:
     st.session_state.keyword = ''
 
+# -----------------------------------------------
+# Helper functions (HTML extraction, cosine_similarity, etc.)
+# (These remain essentially unchanged.)
+# -----------------------------------------------
+
 def extract_headings_and_body(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
-
     tags_to_remove = ['script', 'style', 'noscript', 'header', 'footer', 'nav', 'aside']
     for tag in tags_to_remove:
         for element in soup.find_all(tag):
@@ -64,63 +68,57 @@ def extract_headings_and_body(html_content):
     }
 
     paragraphs = [p.get_text(separator=' ', strip=True) for p in content_to_search.find_all('p') if p.get_text(strip=True)]
-
     meta_title = soup.title.string.strip() if soup.title else ''
     meta_description_tag = soup.find('meta', attrs={'name': 'description'})
     meta_description = meta_description_tag['content'].strip() if meta_description_tag else ''
 
     return meta_title, meta_description, headings, paragraphs
 
-def analyze_headings(all_headings):
-    analysis = {}
-    total_headings_count = 0
-    for level in ["h1", "h2", "h3", "h4"]:
-        level_headings = [h for url_headings in all_headings for h in url_headings[level]]
-        total_headings_count += len(level_headings)
-        analysis[level] = {
-            "count": len(level_headings),
-            "avg_length": sum(len(h) for h in level_headings) / len(level_headings) if level_headings else 0,
-            "common_words": Counter(" ".join(level_headings).lower().split()).most_common(10),
-            "examples": level_headings[:10]
-        }
-    analysis["total_headings_count"] = total_headings_count
-    return analysis
-
-def get_embedding(text, model="text-embedding-ada-002"):
-    response = openai.Embedding.create(
-        input=[text],
-        model=model
-    )
-    return np.array(response['data'][0]['embedding'], dtype=np.float32)
-
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a)*np.linalg.norm(b))
+
+# -----------------------------------------------
+# New / Optimized Embedding Functions
+# -----------------------------------------------
+
+# Cache the embedding of the keyword so that if the same keyword is used again,
+# you avoid an extra API call.
+@st.experimental_memo(show_spinner=False)
+def get_keyword_embedding(text, model="text-embedding-ada-002"):
+    response = openai.Embedding.create(input=[text], model=model)
+    return np.array(response['data'][0]['embedding'], dtype=np.float32)
+
+def get_batch_embeddings(texts, model="text-embedding-ada-002"):
+    """
+    Batch request embeddings for a list of texts.
+    """
+    response = openai.Embedding.create(input=texts, model=model)
+    return [np.array(item['embedding'], dtype=np.float32) for item in response['data']]
+
+# -----------------------------------------------
+# Updated Insights Functions with Batched Embeddings
+# -----------------------------------------------
 
 def generate_semantic_insights(keyword, all_headings):
     competitor_headings = []
     for h_set in all_headings:
-        competitor_headings.extend(h_set["h2"])
-        competitor_headings.extend(h_set["h3"])
-        competitor_headings.extend(h_set["h4"])
-
+        # Use .get(...) in case any level is missing
+        competitor_headings.extend(h_set.get("h2", []))
+        competitor_headings.extend(h_set.get("h3", []))
+        competitor_headings.extend(h_set.get("h4", []))
+    
     if not competitor_headings:
         return "No additional semantic insights available."
-
-    keyword_emb = get_embedding(keyword)
-
-    heading_embeddings = []
-    for ch in competitor_headings:
-        emb = get_embedding(ch)
-        heading_embeddings.append((ch, emb))
-
-    scored = []
-    for ch, emb in heading_embeddings:
-        score = cosine_similarity(keyword_emb, emb)
-        scored.append((ch, score))
-
+    
+    keyword_emb = get_keyword_embedding(keyword)
+    # Batch request embeddings for all competitor headings
+    heading_embeddings = get_batch_embeddings(competitor_headings)
+    
+    scored = [(ch, cosine_similarity(keyword_emb, emb))
+              for ch, emb in zip(competitor_headings, heading_embeddings)]
     scored.sort(key=lambda x: x[1], reverse=True)
     top_headings = [x[0] for x in scored[:5]]
-
+    
     summary = "Topically relevant areas based on competitor headings:\n"
     for th in top_headings:
         summary += f"- {th}\n"
@@ -129,29 +127,28 @@ def generate_semantic_insights(keyword, all_headings):
 
 def generate_body_insights(keyword, all_paragraphs):
     competitor_paragraphs = [p for plist in all_paragraphs for p in plist if len(p.split()) > 5]
-
+    
     if not competitor_paragraphs:
         return "No additional body insights available."
-
-    keyword_emb = get_embedding(keyword)
-    paragraph_embeddings = []
-    for para in competitor_paragraphs:
-        emb = get_embedding(para)
-        paragraph_embeddings.append((para, emb))
-
-    scored = []
-    for para, emb in paragraph_embeddings:
-        score = cosine_similarity(keyword_emb, emb)
-        scored.append((para, score))
-
+    
+    keyword_emb = get_keyword_embedding(keyword)
+    # Batch request embeddings for competitor paragraphs
+    paragraph_embeddings = get_batch_embeddings(competitor_paragraphs)
+    
+    scored = [(para, cosine_similarity(keyword_emb, emb))
+              for para, emb in zip(competitor_paragraphs, paragraph_embeddings)]
     scored.sort(key=lambda x: x[1], reverse=True)
-
     top_paras = [x[0] for x in scored[:5]]
-
+    
     insights = "Competitor Body Insights (relevant paragraphs):\n"
     for i, tp in enumerate(top_paras, 1):
         insights += f"\nParagraph {i}:\n{tp}\n"
     return insights.strip()
+
+# -----------------------------------------------
+# (The generate_optimized_structure_with_insights function remains mostly unchanged)
+# Note that we now use the optimized insights functions above.
+# -----------------------------------------------
 
 def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs):
     openai.api_key = api_key
@@ -255,6 +252,10 @@ Remember: If Outline mode, no full paragraphs. If Full Content mode, fully flesh
         st.error(f"Error generating optimized structure: {str(e)}")
         return None
 
+# -----------------------------------------------
+# (The Word document creation and the Streamlit UI remain unchanged.)
+# -----------------------------------------------
+
 def create_word_document(keyword, optimized_structure):
     if not optimized_structure:
         st.error("No content to create document.")
@@ -348,6 +349,22 @@ if st.button("Generate Content Outline"):
 
         progress_bar.progress(33)
         status_text.text("Analyzing headings...")
+
+        # (Assuming analyze_headings remains unchanged)
+        def analyze_headings(all_headings):
+            analysis = {}
+            total_headings_count = 0
+            for level in ["h1", "h2", "h3", "h4"]:
+                level_headings = [h for url_headings in all_headings for h in url_headings[level]]
+                total_headings_count += len(level_headings)
+                analysis[level] = {
+                    "count": len(level_headings),
+                    "avg_length": sum(len(h) for h in level_headings) / len(level_headings) if level_headings else 0,
+                    "common_words": Counter(" ".join(level_headings).lower().split()).most_common(10),
+                    "examples": level_headings[:10]
+                }
+            analysis["total_headings_count"] = total_headings_count
+            return analysis
 
         heading_analysis = analyze_headings(all_headings)
 
