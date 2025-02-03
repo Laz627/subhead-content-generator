@@ -6,6 +6,7 @@ from docx.shared import Pt
 from io import BytesIO
 import numpy as np
 import openai
+import re
 
 st.set_page_config(page_title="SEO Content Outline Generator", layout="wide")
 st.title("SEO Content Outline Generator")
@@ -31,7 +32,6 @@ if 'keyword' not in st.session_state:
 
 # -----------------------------------------------
 # Helper functions (HTML extraction, cosine_similarity, etc.)
-# (These remain essentially unchanged.)
 # -----------------------------------------------
 
 def extract_headings_and_body(html_content):
@@ -75,7 +75,7 @@ def extract_headings_and_body(html_content):
     return meta_title, meta_description, headings, paragraphs
 
 def cosine_similarity(a, b):
-    return np.dot(a, b) / (np.linalg.norm(a)*np.linalg.norm(b))
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 # -----------------------------------------------
 # New / Optimized Embedding Functions
@@ -146,8 +146,28 @@ def generate_body_insights(keyword, all_paragraphs):
     return insights.strip()
 
 # -----------------------------------------------
-# (The generate_optimized_structure_with_insights function remains mostly unchanged)
-# Note that we now use the optimized insights functions above.
+# Function to validate the generated output against the required template
+# -----------------------------------------------
+def validate_output(output):
+    required_markers = [
+        r"\*\*Meta Title:\*\*",
+        r"\*\*Meta Description:\*\*",
+        r"\*\*H1:\*\*",
+        r"\*\*H2:",
+        r"\*\*Final Summary\*\*"
+    ]
+    
+    errors = []
+    for marker in required_markers:
+        if not re.search(marker, output):
+            errors.append(f"Missing required element: {marker}")
+    
+    if errors:
+        return False, errors
+    return True, "All required elements found."
+
+# -----------------------------------------------
+# Generate Optimized Structure with Insights
 # -----------------------------------------------
 
 def generate_optimized_structure_with_insights(keyword, heading_analysis, competitor_meta_info, api_key, content_mode, article_length, all_headings, all_paragraphs):
@@ -246,13 +266,20 @@ Remember: If Outline mode, no full paragraphs. If Full Content mode, fully flesh
         )
 
         output = response.choices[0].message.content
+
+        # Validate the output against our required template
+        valid, validation_message = validate_output(output)
+        if not valid:
+            st.error("Validation errors in generated output: " + "; ".join(validation_message))
+            return None
+
         return output
     except Exception as e:
         st.error(f"Error generating optimized structure: {str(e)}")
         return None
 
 # -----------------------------------------------
-# (The Word document creation and the Streamlit UI remain unchanged.)
+# Word Document Creation Function
 # -----------------------------------------------
 
 def create_word_document(keyword, optimized_structure):
@@ -311,6 +338,10 @@ def create_word_document(keyword, optimized_structure):
 
     return doc
 
+# -----------------------------------------------
+# Streamlit UI and Main Application Logic
+# -----------------------------------------------
+
 st.write("Enter your API key, target keyword, and upload competitor files:")
 openai_api_key = st.text_input("OpenAI API key:", value=st.session_state.openai_api_key, type="password")
 keyword = st.text_input("Target keyword:", value=st.session_state.keyword)
@@ -349,7 +380,7 @@ if st.button("Generate Content Outline"):
         progress_bar.progress(33)
         status_text.text("Analyzing headings...")
 
-        # (Assuming analyze_headings remains unchanged)
+        # Analyze headings across all competitor files.
         def analyze_headings(all_headings):
             analysis = {}
             total_headings_count = 0
