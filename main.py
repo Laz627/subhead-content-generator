@@ -251,7 +251,7 @@ Remember: Do not output any competitor data. Follow the template exactly.
                 {"role": "system", "content": "You are a helpful SEO content strategist. Follow the instructions exactly."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=16000
+            max_completion_tokens=16000
         )
 
         output = response.choices[0].message.content
