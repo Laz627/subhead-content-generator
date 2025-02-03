@@ -243,7 +243,7 @@ Remember: If Outline mode, no full paragraphs. If Full Content mode, fully flesh
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=16000
+            max_completion_tokens=16000
         )
 
         output = response.choices[0].message.content
