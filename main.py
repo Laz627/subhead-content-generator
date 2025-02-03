@@ -242,7 +242,6 @@ Remember: If Outline mode, no full paragraphs. If Full Content mode, fully flesh
                 {"role": "system", "content": "You are a helpful SEO content strategist."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
             max_completion_tokens=16000
         )
 
